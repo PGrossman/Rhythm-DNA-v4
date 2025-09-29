@@ -1,5 +1,15 @@
 const { normalizeKey } = require('../lib/pathNormalize');
 
+// RUNTIME BANNER: unmistakable marker so we can confirm this exact module was loaded by the worker.
+// This prints to stderr so it appears in runtime Terminal logs even if stdout is buffered.
+try {
+  // Use console.error (goes to stderr) to guarantee log visibility in most setups.
+  console.error('[runtime-instrument] mergeFromTrackJson loaded:', __filename, 'cwd=', process.cwd(), 'pid=', process.pid);
+} catch (e) {
+  // Defensive: never throw here
+  console.warn('[runtime-instrument] merge banner failed', e && e.message ? e.message : e);
+}
+
 /**
  * Case-insensitive unique array filter
  * @param {Array} arr - Input array
@@ -100,26 +110,78 @@ function mergeFromTrackJson(dbState, trackJson) {
      techMap)
   );
 
-  // — Creative-assisted fallback for Brass (safe, reversible) —
-  // If creative suggested brass AND PANNs brass mean >= rules.mean_thresh, add canonical "Brass".
-  (function creativeBrassFallback() {
+  // — DEBUG: dump pre-fallback state so we can trace why Brass was/wasn't injected —
+  try {
+    // Defensive creative suggestedInstruments lookup: support creative.json.* and creative.* shapes
+    const creativeRawSuggestA = Array.isArray(src?.creative?.suggestedInstruments) ? src.creative.suggestedInstruments : [];
+    const creativeRawSuggestB = Array.isArray(src?.creative?.json?.suggestedInstruments) ? src.creative.json.suggestedInstruments : [];
+    const creativeSuggestMerged = uniqCI([...creativeRawSuggestA, ...creativeRawSuggestB]).map(s => String(s || '').toLowerCase());
+
+    const dbg_pannsMean = Number(src?.instruments_ensemble?.decision_trace?.per_model?.panns?.mean_probs?.brass || 0);
+    const dbg_pannsPos  = Number(src?.instruments_ensemble?.decision_trace?.per_model?.panns?.pos_ratio?.brass || 0);
+    const dbg_meanThresh = Number(src?.instruments_ensemble?.decision_trace?.rules?.mean_thresh || 0.006);
+    const dbg_posFallback = 0.005;
+
+    console.debug('[merge-debug] pre-fallback instrumentFallback:', JSON.stringify(instrumentFallback));
+    console.debug('[merge-debug] creativeSuggestMerged:', JSON.stringify(creativeSuggestMerged));
+    console.debug('[merge-debug] pannsMean, pannsPos, meanThresh, posFallback:', dbg_pannsMean, dbg_pannsPos, dbg_meanThresh, dbg_posFallback);
+
+  } catch (e) {
+    console.warn('[merge-debug] pre-fallback debug failed:', e && e.message ? e.message : e);
+  }
+
+  // — Robust creative+model fallback for Brass —
+  (function robustCreativeBrassFallback() {
     try {
-      const creativeSuggest = (src?.creative?.suggestedInstruments || []).map(s => String(s || '').toLowerCase());
-      const pannsBrassMean = Number(src?.instruments_ensemble?.decision_trace?.per_model?.panns?.mean_probs?.brass || 0);
+      // RUNTIME BANNER: record invocation and key model numbers so we can see why fallback did/didn't inject
+      try {
+        const __dbg_pannsMean = Number(src?.instruments_ensemble?.decision_trace?.per_model?.panns?.mean_probs?.brass || 0);
+        const __dbg_pannsPos  = Number(src?.instruments_ensemble?.decision_trace?.per_model?.panns?.pos_ratio?.brass || 0);
+        console.error('[runtime-instrument] robustCreativeBrassFallback invoked — pannsMean=', __dbg_pannsMean, 'pannsPos=', __dbg_pannsPos, 'file=', __filename, 'pid=', process.pid);
+      } catch (e) {
+        console.error('[runtime-instrument] robustCreativeBrassFallback dbg failed:', e && e.message ? e.message : e);
+      }
+
+      // Broaden creative extraction here too (keeps original behavior but is defensive)
+      const creativeSuggestSourceA = Array.isArray(src?.creative?.suggestedInstruments) ? src.creative.suggestedInstruments : [];
+      const creativeSuggestSourceB = Array.isArray(src?.creative?.json?.suggestedInstruments) ? src.creative.json.suggestedInstruments : [];
+      const creativeSuggest = uniqCI([...creativeSuggestSourceA, ...creativeSuggestSourceB]).map(s => String(s || '').toLowerCase());
+
+      const pannsMean = Number(src?.instruments_ensemble?.decision_trace?.per_model?.panns?.mean_probs?.brass || 0);
+      const pannsPos  = Number(src?.instruments_ensemble?.decision_trace?.per_model?.panns?.pos_ratio?.brass || 0);
       const meanThresh = Number(src?.instruments_ensemble?.decision_trace?.rules?.mean_thresh || 0.006);
+      const posFallbackThresh = 0.005;
+
       const creativeSaysBrass = creativeSuggest.some(s => s.includes('brass'));
-      if (creativeSaysBrass && pannsBrassMean >= meanThresh) {
+      const meanPass = pannsMean >= meanThresh;
+      const posPass = pannsPos >= posFallbackThresh;
+
+      console.debug('[merge-debug] fallback inputs — creativeSaysBrass, meanPass, posPass:', creativeSaysBrass, meanPass, posPass);
+      console.debug('[merge-debug] fallback raw — creativeSuggest, pannsMean, pannsPos, meanThresh, posFallbackThresh:', JSON.stringify(creativeSuggest), pannsMean, pannsPos, meanThresh, posFallbackThresh);
+
+      if ((creativeSaysBrass || meanPass || posPass)) {
         const lowerInstrumentNames = instrumentFallback.map(i => String(i || '').toLowerCase());
         if (!lowerInstrumentNames.includes('brass') && !lowerInstrumentNames.includes('brass (section)')) {
           instrumentFallback.push('Brass');
           instrumentFallback = uniqCI(instrumentFallback);
-          console.debug('[merge] creativeBrassFallback: injected "Brass" (panns.mean=' + pannsBrassMean + ', mean_thresh=' + meanThresh + ')');
+          console.debug('[merge-debug] robustCreativeBrassFallback: injected "Brass" (panns.mean=' + pannsMean + ', panns.pos=' + pannsPos + ', mean_thresh=' + meanThresh + ', pos_thresh=' + posFallbackThresh + ', creative=' + creativeSaysBrass + ')');
+        } else {
+          console.debug('[merge-debug] robustCreativeBrassFallback: NOT injecting — already present in instrumentFallback:', JSON.stringify(instrumentFallback));
         }
+      } else {
+        console.debug('[merge-debug] robustCreativeBrassFallback: conditions not met — no injection');
       }
     } catch (e) {
-      console.warn('[merge] creativeBrassFallback failed:', e && e.message ? e.message : e);
+      console.warn('[merge-debug] robustCreativeBrassFallback failed:', e && e.message ? e.message : e);
     }
   })();
+
+  // — DEBUG: dump post-fallback state so we can confirm the final array used for DB write —
+  try {
+    console.debug('[merge-debug] post-fallback instrumentFallback:', JSON.stringify(instrumentFallback));
+  } catch (e) {
+    console.warn('[merge-debug] post-fallback debug failed:', e && e.message ? e.message : e);
+  }
 
   // — Aggregate family labels (Brass / Woodwinds) without removing individual instruments —
   // If any member instrument appears (e.g., 'Trumpet', 'Trombone', 'Saxophone', 'Flute', 'Clarinet'),
@@ -149,6 +211,29 @@ function mergeFromTrackJson(dbState, trackJson) {
       console.warn('[DB] addInstrumentFamilies failed:', e && e.message ? e.message : e);
     }
   })(instrumentFallback);
+
+  // — FORCE: ensure downstream writers see the resolved instrument list —
+  try {
+    // Ensure analysis container exists
+    src.analysis = src.analysis || {};
+
+    // Force final instruments and instruments fields so CSV/writers consume this array.
+    // Keep canonical ordering and exact strings in instrumentFallback.
+    src.analysis.final_instruments = Array.isArray(instrumentFallback) ? instrumentFallback.slice() : [];
+    src.analysis.instruments       = Array.isArray(instrumentFallback) ? instrumentFallback.slice() : [];
+
+    // Visible runtime banner to stderr so logs show what was written
+    try {
+      // console.error goes to stderr and is visible in most log collectors/terminals
+      console.error('[merge-force] wrote final_instruments:', JSON.stringify(src.analysis.final_instruments), 'key=', key, 'pid=', process.pid);
+    } catch (e2) {
+      console.warn('[merge-force] warn writing final_instruments log failed:', e2 && e2.message ? e2.message : e2);
+    }
+
+  } catch (e) {
+    // Non-fatal: do not stop DB write, but log
+    console.warn('[merge-force] failed to set src.analysis.final_instruments:', e && e.message ? e.message : e);
+  }
 
   // --- Technical ---
   const technical = src.technical || {};

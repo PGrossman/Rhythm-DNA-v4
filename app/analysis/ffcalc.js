@@ -19,6 +19,7 @@ const fs = require('node:fs');               // for statSync/readFileSync
 const fsp = require('node:fs/promises');     // keep async fs if used elsewhere
 const os = require('node:os');
 const { BrowserWindow } = require("electron");
+const { shouldWriteCsv } = require('../utils/csvWriter');
 
 // v1.0.0: Orchestration mode toggle
 const INSTRUMENTATION_MODE = process.env.RNA_INSTRUMENTATION_MODE || "CONCURRENT"; // "SEQUENTIAL" or "CONCURRENT"
@@ -1411,7 +1412,7 @@ function getDefaultCreative() {
   };
 }
 
-async function analyzeMp3(filePath, win = null, model = 'qwen3:8b', dbFolder = null) {
+async function analyzeMp3(filePath, win = null, model = 'qwen3:8b', dbFolder = null, settings = null) {
   const baseName = path.basename(filePath, path.extname(filePath));
   // Send technical starting event
   if (win) {
@@ -1726,10 +1727,10 @@ async function analyzeMp3(filePath, win = null, model = 'qwen3:8b', dbFolder = n
   console.log(`[TEMPO DEBUG] Saving BPM to JSON for ${baseName}: ${analysis.estimated_tempo_bpm}`);
   await fsp.writeFile(jsonPath, JSON.stringify(analysis, null, 2));
   
-  // CSV writing with toggle: default OFF; set RNA_WRITE_CSV=1 to re-enable
+  // CSV writing with settings-based control (fallback to environment variable)
   let csvPath = null; // default when disabled
 
-  if (WRITE_CSV) {
+  if (shouldWriteCsv(settings) || WRITE_CSV) {
     try {
       // Write CSV in 2-column format (field name, value)
       csvPath = path.join(dir, `${baseName}.csv`);
@@ -1810,7 +1811,7 @@ async function analyzeMp3(filePath, win = null, model = 'qwen3:8b', dbFolder = n
       // keep csvPath as null on failure
     }
   } else {
-    console.log("[CSV] Skipped (disabled via RNA_WRITE_CSV)");
+    console.log("[CSV] Skipped (disabled via settings or RNA_WRITE_CSV)");
   }
   
   // Generate waveform PNG if dbFolder provided

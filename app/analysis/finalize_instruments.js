@@ -45,6 +45,7 @@ export function finalizeInstruments({
   }
 
   // Definition of families to aggregate
+  // BRASS_MEMBERS: only individual member instruments (do NOT include "Brass (section)")
   const BRASS_MEMBERS = new Set([
     "Trumpet",
     "Trombone",
@@ -52,48 +53,63 @@ export function finalizeInstruments({
     "Tuba",
     "Flugelhorn",
     "Cornet",
-    // defensive variants
     "Trumpet (mute)",
-    "Trumpet (muted)",
-    "Brass (section)"
+    "Trumpet (muted)"
   ]);
+  // WOODWIND_MEMBERS: only individual instruments (do NOT include "Woodwinds (section)" or "Woodwinds")
   const WOODWIND_MEMBERS = new Set([
-    "Saxophone (Tenor)",
-    "Saxophone (Alto)",
-    "Saxophone (Baritone)",
     "Saxophone",
-    "Tenor Sax",
-    "Alto Sax",
-    "Baritone Sax",
+    "Alto Saxophone",
+    "Tenor Saxophone",
+    "Baritone Saxophone",
     "Flute",
     "Clarinet",
     "Oboe",
-    "English Horn",
     "Bassoon",
-    "Piccolo",
-    "Woodwind",
-    "Woodwinds",
-    "Woodwinds (section)"
+    "Piccolo"
   ]);
 
   // Build a set for quick checks
   const outSet = new Set(out);
 
-  // If any brass members present, remove them and add a single "Brass" label
-  const hasBrassMember = out.some(i => BRASS_MEMBERS.has(i));
-  if (hasBrassMember) {
-    for (const mem of BRASS_MEMBERS) outSet.delete(mem);
-    // remove variants so we canonicalize to "Brass"
-    outSet.delete("Brass (section)");
-    outSet.add("Brass");
+  // Collapse individual brass members into the family label, but preserve an explicit
+  // "Brass (section)" if the ensemble created it. Also ensure canonical "Brass" exists.
+  const hasBrassMember = [...BRASS_MEMBERS].some(m => outSet.has(m));
+  const hasBrassSection = outSet.has("Brass (section)");
+
+  if (hasBrassMember || hasBrassSection) {
+    // Remove only non-section member instruments
+    for (const mem of BRASS_MEMBERS) {
+      outSet.delete(mem);
+    }
+
+    // Preserve explicit section tag if present; otherwise, add canonical section label
+    if (!outSet.has("Brass (section)")) {
+      outSet.add("Brass (section)");
+    }
+
+    // Also add normalized "Brass" for downstream expectations (keep both if necessary)
+    if (!outSet.has("Brass")) {
+      outSet.add("Brass");
+    }
   }
 
-  // If any woodwind members present, remove them and add a single "Woodwinds" label
-  const hasWoodwindMember = out.some(i => WOODWIND_MEMBERS.has(i));
-  if (hasWoodwindMember) {
-    for (const mem of WOODWIND_MEMBERS) outSet.delete(mem);
-    outSet.delete("Woodwinds (section)");
-    outSet.add("Woodwinds");
+  // Collapse individual woodwind members into family label, but preserve explicit section tag
+  const hasWoodMember = [...WOODWIND_MEMBERS].some(m => outSet.has(m));
+  const hasWoodSection = outSet.has("Woodwinds (section)");
+
+  if (hasWoodMember || hasWoodSection) {
+    for (const mem of WOODWIND_MEMBERS) {
+      outSet.delete(mem);
+    }
+
+    if (!outSet.has("Woodwinds (section)")) {
+      outSet.add("Woodwinds (section)");
+    }
+
+    if (!outSet.has("Woodwinds")) {
+      outSet.add("Woodwinds");
+    }
   }
 
   // Preserve existing "Strings (section)" soft-guard behavior:

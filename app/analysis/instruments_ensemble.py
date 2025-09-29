@@ -42,14 +42,35 @@ import re
 import os as _os
 _PER_WINDOW = _os.getenv("RNA_PER_WINDOW", "0") == "1"
 
+# RUNTIME BANNER: unmistakable module-load marker so we can confirm the Python worker loaded this patched file.
+try:
+    # Use stderr so it is visible in most log setups
+    import sys, os
+    sys.stderr.write(f"[runtime-instrument] instruments_ensemble loaded: {__file__} cwd={os.getcwd()} pid={os.getpid()}\n")
+    sys.stderr.flush()
+except Exception as _e:
+    try:
+        sys.stderr.write(f"[runtime-instrument] instruments_ensemble load banner failed: {_e}\n")
+        sys.stderr.flush()
+    except Exception:
+        pass
+
 import numpy as np
 
 # Logging
 logger = logging.getLogger("ENSEMBLE")
 
-# Compatibility shim: make _combined_mean and _combined_mean_pos tolerant of legacy and newer call signatures.
+# --- COMPATIBILITY WRAPPERS: tolerant _combined_mean / _combined_mean_pos ----------------
+import sys
 import logging
 _log = logging.getLogger("instruments_ensemble")
+
+# Module load banner (stderr for runtime visibility)
+try:
+    sys.stderr.write(f"[runtime-instrument] instruments_ensemble loaded: {__file__} cwd={__import__('os').getcwd()} pid={__import__('os').getpid()}\n")
+    sys.stderr.flush()
+except Exception:
+    pass
 
 def _combined_mean_compat(*args, **kwargs):
     """
@@ -61,6 +82,13 @@ def _combined_mean_compat(*args, **kwargs):
     - Returns a float combined mean (or 0.0 on bad input).
     """
     try:
+        # Small runtime log to indicate invocation
+        try:
+            sys.stderr.write(f"[runtime-instrument] _combined_mean_compat called args_len={len(args)} kwargs_keys={list(kwargs.keys())}\n")
+            sys.stderr.flush()
+        except Exception:
+            pass
+
         # Case A: single positional arg (legacy)
         if len(args) == 1:
             y_means = args[0] or {}
@@ -122,6 +150,13 @@ def _combined_mean_pos_compat(*args, **kwargs):
     - Returns (combined_mean, combined_pos) tuple of floats.
     """
     try:
+        # runtime banner for invocation
+        try:
+            sys.stderr.write(f"[runtime-instrument] _combined_mean_pos_compat called args_len={len(args)} kwargs_keys={list(kwargs.keys())}\n")
+            sys.stderr.flush()
+        except Exception:
+            pass
+
         # Single dict case: try to extract mean_probs and pos_ratio if present
         if len(args) == 1:
             data = args[0] or {}
@@ -202,6 +237,7 @@ def _combined_mean_pos_compat(*args, **kwargs):
 
 # Bind name for backwards compatibility
 _combined_mean_pos = _combined_mean_pos_compat
+# --- END COMPATIBILITY WRAPPERS ------------------------------------------------------
 
 # --- DEBUG LOGGING SETUP ---
 def _ens_log_dir():
@@ -1200,6 +1236,90 @@ def _booster_mix_only_harp_v1(per_model, decision_trace, current_instruments):
 
     trace["added"] = added
     decision_trace.setdefault("boosts", {})["mix_only_harp_v1"] = trace
+    return added
+
+def _apply_mix_only_brass_boost(current_instruments: list, trace: dict) -> list:
+    """
+    Mix-only brass booster v1:
+    - Uses per_model (panns + yamnet) mean_probs and pos_ratio to detect generic brass
+      or a small summed horn presence and, if evidence passes, adds "Brass (section)".
+    - Returns list of added instrument strings (possibly empty).
+    """
+    added = []
+    try:
+        per_model = trace.get("per_model", {}) if isinstance(trace, dict) else {}
+        panns = per_model.get("panns", {}) or {}
+        yamnet = per_model.get("yamnet", {}) or {}
+
+        # Extract mean_probs and pos_ratio maps (safe defaults)
+        p_means = panns.get("mean_probs", {}) if isinstance(panns.get("mean_probs", {}), dict) else {}
+        y_means = yamnet.get("mean_probs", {}) if isinstance(yamnet.get("mean_probs", {}), dict) else {}
+        p_pos = panns.get("pos_ratio", {}) if isinstance(panns.get("pos_ratio", {}), dict) else {}
+        y_pos = yamnet.get("pos_ratio", {}) if isinstance(yamnet.get("pos_ratio", {}), dict) else {}
+
+        # helper: combined mean and pos across models (safe numeric)
+        def comb_mean(k):
+            try:
+                return float(p_means.get(k, 0.0)) + float(y_means.get(k, 0.0))
+            except Exception:
+                return 0.0
+        def comb_pos(k):
+            try:
+                return float(p_pos.get(k, 0.0)) + float(y_pos.get(k, 0.0))
+            except Exception:
+                return 0.0
+
+        # Combined generic brass evidence
+        brass_mean = comb_mean("brass")
+        brass_pos = comb_pos("brass")
+
+        # Individual horn members (some datasets call saxophone 'sax' or 'saxophone')
+        trumpet_mean = comb_mean("trumpet")
+        trombone_mean = comb_mean("trombone")
+        sax_mean = comb_mean("saxophone") or comb_mean("sax")
+
+        horn_sum = float(trumpet_mean) + float(trombone_mean) + float(sax_mean)
+
+        # Conservative thresholds tuned to observed short-solo values
+        TH = {
+            "brass_mean": 0.005,   # combined generic brass mean
+            "brass_pos":  0.005,   # combined generic brass pos ratio
+            "horn_sum":   0.008    # sum of individual horn means
+        }
+
+        # Decision: pass if generic brass signal (mean+pos) OR sum of horn members exceeds small threshold
+        pass_brass = ((brass_mean >= TH["brass_mean"] and brass_pos >= TH["brass_pos"]) or (horn_sum >= TH["horn_sum"]))
+
+        # Only add if not already present (case-sensitive canonical)
+        if pass_brass and ("Brass (section)" not in current_instruments):
+            current_instruments.append("Brass (section)")
+            added.append("Brass (section)")
+
+        # Record decision in trace for observability
+        try:
+            trace.setdefault("boosts", {})
+            trace["boosts"]["mix_only_brass_v1"] = {
+                "booster": "mix_only_brass_v1",
+                "thresholds": TH,
+                "values": {
+                    "brass_mean": brass_mean,
+                    "brass_pos": brass_pos,
+                    "horn_sum": horn_sum,
+                    "trumpet": trumpet_mean,
+                    "trombone": trombone_mean,
+                    "saxophone": sax_mean
+                },
+                "pass": bool(pass_brass),
+                "added": list(added)
+            }
+        except Exception:
+            # Non-fatal: do not break ensemble if trace update fails
+            pass
+
+    except Exception:
+        # Defensive: never raise out of booster; return what we've added (likely empty)
+        return added
+
     return added
 
 def _booster_mix_only_horns_specific_v1(per_model, decision_trace, current_instruments):
@@ -4535,6 +4655,18 @@ def analyze(audio_path: str, use_demucs: bool = True, diag: bool = False) -> Dic
                 if item not in current:
                     current.append(item)
 
+            # Add mix-only Brass booster so we seed a Brass (section) tag for downstream boosters
+            try:
+                added_brass = _apply_mix_only_brass_boost(current, trace)
+                # Guard: ensure we don't duplicate
+                for inst in added_brass:
+                    if inst and inst not in current:
+                        current.append(inst)
+            except Exception:
+                # Non-fatal: continue even if the brass booster fails
+                pass
+
+            # Now run the original horns-specific booster (which can rely on the section tag)
             # Specific horns booster (Trumpet/Trombone)
             added_specific_horns = _booster_mix_only_horns_specific_v1(per_model, trace, current)
             for item in added_specific_horns:
