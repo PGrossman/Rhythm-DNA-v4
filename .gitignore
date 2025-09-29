@@ -10,6 +10,12 @@ app/models/xenova/Xenova/ast-finetuned-audioset-10-10-0.4593/onnx/model.onnx
 node_modules/electron/dist/
 node_modules/ffprobe-static/bin/
 
+# Large Python libraries
+app/py/.venv/lib/python3.9/site-packages/tensorflow/
+app/py/.venv/lib/python3.9/site-packages/torch/
+app/py/.venv/lib/python3.9/site-packages/clang/
+app/py/.venv/lib/python3.9/site-packages/llvmlite/
+
 # Python cache
 __pycache__/
 *.pyc
