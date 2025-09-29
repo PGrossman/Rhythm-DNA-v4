@@ -1680,6 +1680,41 @@ async function analyzeMp3(filePath, win = null, model = 'qwen3:8b', dbFolder = n
   // 🚫 Kill legacy / misleading fields so they cannot leak into UI/filters:
   delete analysis.detected_instruments;       // remove this field entirely
   delete analysis.audio_probes;               // keep it only if you truly need raw debug; otherwise delete
+
+  // --- BEGIN PATCH: Invoke finalizeInstruments() and persist result to analysis.finalInstruments ---
+  try {
+    // Simple require; handle both named and default/commonjs exports.
+    const finalizeModule = require('./finalize_instruments');
+    const finalizeInstruments = finalizeModule && (finalizeModule.finalizeInstruments || finalizeModule.default || finalizeModule);
+
+    if (typeof finalizeInstruments === 'function') {
+      analysis.finalInstruments = finalizeInstruments({
+        ensembleInstruments: Array.isArray(analysis.instruments) ? analysis.instruments : [],
+        probeRescues: Array.isArray(analysis.probe_rescues) ? analysis.probe_rescues : [],
+        additional: Array.isArray(analysis.additional) ? analysis.additional : []
+      });
+    } else {
+      // Fallback: preserve raw instruments if finalizer not available
+      analysis.finalInstruments = Array.isArray(analysis.instruments) ? analysis.instruments : [];
+    }
+  } catch (err) {
+    // Defensive logging: prefer existing `log` helper if available.
+    if (typeof log === 'function') {
+      log('[FFCALC] finalizeInstruments failed: ' + (err && err.message ? err.message : String(err)));
+    } else {
+      console.warn('[FFCALC] finalizeInstruments failed:', err && err.message ? err.message : err);
+    }
+    analysis.finalInstruments = Array.isArray(analysis.instruments) ? analysis.instruments : [];
+  }
+
+  // Single-line confirmation log so you can grep runtime logs for verification.
+  try {
+    (typeof log === 'function' ? log : console.log)(`[FFCALC] finalized instruments -> ${Array.isArray(analysis.finalInstruments) ? analysis.finalInstruments.join(', ') : '(none)'}`);
+  } catch (_) {
+    // best-effort; do not throw
+    try { console.log('[FFCALC] finalized instruments -> (failed to stringify)'); } catch (_) {}
+  }
+  // --- END PATCH ---
   // If you keep audio_probes for dev, ensure UI never reads it.
   
   // (Ensure `analysis` has been created/filled up to this point)
