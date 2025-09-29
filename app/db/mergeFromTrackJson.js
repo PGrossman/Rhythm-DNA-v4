@@ -99,8 +99,14 @@ function mergeFromTrackJson(dbState, trackJson) {
   // --- Instrument fallback precedence (instrumentation > analysis > creative > technical.audioHints) ---
   const techMap = hintsTrueToInstruments(src?.technical?.audioHints || {});
   const instFromInstr = Array.isArray(src?.instrumentation?.instruments) ? src.instrumentation.instruments : [];
-  const instFromAnalysis = Array.isArray(src?.analysis?.final_instruments) ? src.analysis.final_instruments
-                            : Array.isArray(src?.analysis?.instruments) ? src.analysis.instruments : [];
+  // Use finalInstruments (cleaned/deduplicated) if available, fallback to raw instruments
+  const instFromAnalysis = Array.isArray(src?.analysis?.finalInstruments)
+                            ? src.analysis.finalInstruments
+                            : Array.isArray(src?.analysis?.final_instruments) 
+                              ? src.analysis.final_instruments
+                              : Array.isArray(src?.analysis?.instruments) 
+                                ? src.analysis.instruments 
+                                : [];
   const instFromCreative = Array.isArray(creative.instrument) ? creative.instrument : [];
   // Base precedence: instrumentation -> analysis -> creative -> technical hints
   let instrumentFallback = uniqCI(
