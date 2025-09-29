@@ -108,6 +108,16 @@ function mergeFromTrackJson(dbState, trackJson) {
                                 ? src.analysis.instruments 
                                 : [];
   const instFromCreative = Array.isArray(creative.instrument) ? creative.instrument : [];
+  
+  // DEBUG: Log extracted instruments from each source
+  console.log('[DEBUG] Extracted instruments from sources:');
+  console.log('[DEBUG] instFromInstr:', instFromInstr);
+  console.log('[DEBUG] instFromAnalysis:', instFromAnalysis);
+  console.log('[DEBUG] instFromCreative:', instFromCreative);
+  console.log('[DEBUG] techMap:', techMap);
+  console.log('[DEBUG] analysis.finalInstruments:', src?.analysis?.finalInstruments);
+  console.log('[DEBUG] analysis.instruments:', src?.analysis?.instruments);
+  
   // Base precedence: instrumentation -> analysis -> creative -> technical hints
   let instrumentFallback = uniqCI(
     (instFromInstr.length ? instFromInstr :
@@ -115,6 +125,9 @@ function mergeFromTrackJson(dbState, trackJson) {
      instFromCreative.length ? instFromCreative :
      techMap)
   );
+  
+  // DEBUG: Log the final instrumentFallback
+  console.log('[DEBUG] Final instrumentFallback:', instrumentFallback);
 
   // — DEBUG: dump pre-fallback state so we can trace why Brass was/wasn't injected —
   try {
@@ -248,6 +261,12 @@ function mergeFromTrackJson(dbState, trackJson) {
   // --- RhythmDB write/merge ---
   const prevR = dbState.rhythm?.tracks?.[key] || {};
   const nowISO = new Date().toISOString();
+  
+  // DEBUG: Log what we're about to save
+  console.log('[DEBUG] About to save track with instruments:', instrumentFallback);
+  console.log('[DEBUG] Track key:', key);
+  console.log('[DEBUG] Previous track data:', prevR);
+  
   dbState.rhythm = dbState.rhythm || { tracks: {} };
   dbState.rhythm.tracks[key] = {
     // identity
@@ -280,6 +299,11 @@ function mergeFromTrackJson(dbState, trackJson) {
 
   // --- CriteriaDB write/merge (what the Search UI facets read) ---
   const prevC = dbState.criteria?.[key] || {};
+  
+  // DEBUG: Log criteria update
+  console.log('[DEBUG] Updating criteria with instruments:', instrumentFallback);
+  console.log('[DEBUG] Previous criteria data:', prevC);
+  
   dbState.criteria = dbState.criteria || {};
   dbState.criteria[key] = {
     // facets
@@ -292,6 +316,12 @@ function mergeFromTrackJson(dbState, trackJson) {
     tempoBands: prevC.tempoBands || []
   };
 
+  // DEBUG: Log final database state
+  console.log('[DEBUG] Final database state for track:', key);
+  console.log('[DEBUG] RhythmDB instruments:', dbState.rhythm.tracks[key]?.creative?.instrument);
+  console.log('[DEBUG] CriteriaDB instruments:', dbState.criteria[key]?.instrument);
+  console.log('[DEBUG] Analysis instruments:', dbState.rhythm.tracks[key]?.analysis?.instruments);
+  
   console.log('[DB] Merged track JSON:', key, '-', instrumentFallback.length, 'instruments,', creative.genre.length, 'genres');
   return dbState;
 }
