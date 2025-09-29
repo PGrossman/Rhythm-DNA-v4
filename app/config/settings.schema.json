@@ -1,0 +1,17 @@
+{
+  "writePerTrackJsonToSourceDir": {
+    "type": "boolean",
+    "default": true,
+    "description": "Write a single JSON summary next to each source audio file when a track finishes."
+  },
+  "writeCsvArtifacts": {
+    "type": "boolean",
+    "default": false,
+    "description": "Enable/disable legacy CSV artifact creation."
+  },
+  "writeWaveformPng": {
+    "type": "boolean",
+    "default": true,
+    "description": "Generate waveform PNG images for processed tracks."
+  }
+}

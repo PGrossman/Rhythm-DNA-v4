@@ -1,0 +1,26 @@
+# ---- Core numeric & audio ----
+numpy==1.26.4
+scipy==1.11.4
+soundfile==0.12.1
+librosa==0.10.2.post1
+numba==0.58.1
+
+# ---- PyTorch (Apple Silicon, MPS) ----
+torch==2.3.1
+torchaudio==2.3.1
+
+# ---- Demucs (stems) ----
+demucs==4.0.1
+
+# ---- PANNs (CNN14) ----
+panns-inference==0.1.1
+
+# ---- TensorFlow for YAMNet (Apple Silicon) ----
+tensorflow-macos==2.15.0; platform_system=="Darwin" and platform_machine=="arm64"
+tensorflow-metal==1.1.0; platform_system=="Darwin" and platform_machine=="arm64"
+tensorflow-hub==0.16.1
+
+# ---- Utilities ----
+tqdm==4.66.4
+requests==2.32.3
+resampy==0.4.3

@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RhythmDNA</title>
+    <style>
+      * { box-sizing: border-box; }
+      
+      body { 
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; 
+        margin: 0;
+        background: #ffffff;
+        color: #333;
+      }
+      
+      header { 
+        padding: 16px 20px; 
+        background: #ffffff;
+        color: #000000;
+        font-size: 16px;
+        font-weight: 500;
+        border-bottom: 1px solid #e0e0e0;
+      }
+      
+      .tabs { 
+        display: flex; 
+        gap: 0; 
+        padding: 0; 
+        background: #f5f5f5;
+        border-bottom: 2px solid #e0e0e0;
+      }
+      
+      .tabs button { 
+        padding: 12px 24px; 
+        cursor: pointer;
+        background: transparent;
+        color: #666;
+        border: none;
+        border-bottom: 3px solid transparent;
+        font-size: 14px;
+        font-weight: 400;
+        transition: all 0.2s ease;
+      }
+      
+      .tabs button:hover {
+        background: #eeeeee;
+      }
+      
+      .tabs button.active {
+        color: #007AFF;
+        border-bottom-color: #007AFF;
+        font-weight: 500;
+      }
+      
+      .panel { 
+        padding: 24px;
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+      
+      h2 {
+        font-size: 20px;
+        font-weight: 500;
+        margin: 0 0 20px 0;
+        color: #333;
+      }
+      
+      h3 {
+        font-size: 16px;
+        font-weight: 500;
+        margin: 20px 0 12px 0;
+        color: #333;
+      }
+      
+      /* Drop zone styles */
+      #drop-zone {
+        border: 2px dashed #d0d0d0;
+        border-radius: 8px;
+        padding: 80px 40px;
+        text-align: center;
+        background: #fafafa;
+        transition: all 0.2s ease;
+      }
+      
+      #drop-zone:hover {
+        border-color: #007AFF;
+        background: #f0f8ff;
+      }
+      
+      #drop-zone.drag-over {
+        border-color: #007AFF;
+        background: #e6f2ff;
+      }
+      
+      #drop-zone p {
+        margin: 0 0 8px 0;
+        font-size: 16px;
+        color: #666;
+      }
+      
+      #drop-zone .folder-icon {
+        font-size: 48px;
+        margin-bottom: 16px;
+        color: #999;
+      }
+      
+      #drop-zone .subtitle {
+        font-size: 13px;
+        color: #999;
+        margin: 0;
+      }
+      
+      /* Settings styles */
+      .settings-group {
+        margin-bottom: 32px;
+        background: #ffffff;
+        border-radius: 8px;
+      }
+      
+      .settings-group h3 {
+        font-size: 16px;
+        font-weight: 500;
+        margin: 0 0 4px 0;
+        color: #333;
+      }
+      
+      .settings-description {
+        font-size: 13px;
+        color: #666;
+        margin: 0 0 16px 0;
+      }
+      
+      .setting-row {
+        margin-bottom: 16px;
+      }
+      
+      input[type="text"],
+      input[type="number"],
+      select {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1px solid #d0d0d0;
+        border-radius: 6px;
+        font-size: 14px;
+        background: #ffffff;
+        color: #333;
+      }
+      
+      input[type="text"]:focus,
+      input[type="number"]:focus,
+      select:focus {
+        outline: none;
+        border-color: #007AFF;
+        box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+      }
+      
+      .db-folder-row {
+        display: flex;
+        gap: 12px;
+        align-items: stretch;
+      }
+      
+      .db-folder-input {
+        flex: 1;
+      }
+      
+      button {
+        padding: 8px 16px;
+        background: #007AFF;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-size: 14px;
+        cursor: pointer;
+        transition: background 0.2s ease;
+      }
+      
+      button:hover {
+        background: #0051D5;
+      }
+      
+      button:active {
+        background: #0041C4;
+      }
+      
+      button.secondary {
+        background: #f0f0f0;
+        color: #333;
+      }
+      
+      button.secondary:hover {
+        background: #e0e0e0;
+      }
+      
+      /* Analysis queue styles */
+      .queue-empty {
+        text-align: center;
+        padding: 60px 20px;
+        color: #666;
+      }
+      
+      .queue-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+      }
+      
+      .queue-table th {
+        text-align: left;
+        padding: 8px 12px;
+        border-bottom: 2px solid #e0e0e0;
+        font-weight: 500;
+        color: #666;
+        font-size: 13px;
+        text-transform: uppercase;
+      }
+      
+      .queue-table td {
+        padding: 12px;
+        border-bottom: 1px solid #f0f0f0;
+        font-size: 14px;
+      }
+      
+      .status-badge {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 500;
+      }
+      
+      .status-queued {
+        background: #f0f0f0;
+        color: #666;
+      }
+      
+      .status-processing {
+        background: #fff3cd;
+        color: #856404;
+      }
+      
+      .status-25%, .status-50%, .status-75% {
+        background: #fff3cd;
+        color: #856404;
+      }
+      
+      .status-complete {
+        background: #d4edda;
+        color: #155724;
+      }
+      
+      .status-error {
+        background: #f8d7da;
+        color: #721c24;
+      }
+      .status-reanalyze {
+        background: #fef3c7;
+        color: #92400e;
+      }
+      .status-skip {
+        background: #f3f4f6;
+        color: #6b7280;
+      }
+      .status-queue-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      /* Settings buttons visibility and styling fixes */
+      #choose-folder {
+        background-color: #6b7280;
+        color: white;
+        border: 1px solid #4b5563;
+        padding: 8px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: background-color 0.2s;
+      }
+
+      #choose-folder:hover {
+        background-color: #4b5563;
+      }
+
+      #update-database {
+        background-color: #3b82f6;
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: background-color 0.2s;
+      }
+
+      #update-database:hover {
+        background-color: #2563eb;
+      }
+
+      #update-criteria {
+        background-color: #3b82f6;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        transition: background-color 0.2s;
+      }
+
+      #update-criteria:hover {
+        background-color: #2563eb;
+      }
+
+      /* Ensure secondary buttons render visibly if used */
+      button.secondary {
+        background-color: #6b7280 !important;
+        color: white !important;
+        border: 1px solid #4b5563 !important;
+      }
+
+      button.secondary:hover {
+        background-color: #4b5563 !important;
+      }
+
+      /* Ensure all settings buttons are visible and consistent */
+      .settings-group button {
+        min-height: 36px;
+        font-weight: 500;
+      }
+
+      /* Disabled button state */
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+    </style>
+  </head>
+  <body>
+    <header>RhythmDNA</header>
+    <div class="tabs">
+      <button id="tab-analysis-btn" class="active">Analysis</button>
+      <button id="tab-search-btn">Search</button>
+      <button id="tab-settings-btn">Settings</button>
+    </div>
+    <main id="panel" class="panel"></main>
+    <script src="./renderer.js" type="module"></script>
+  </body>
+</html>
+
+
