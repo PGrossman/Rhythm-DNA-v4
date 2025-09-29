@@ -99,18 +99,40 @@ function mergeFromTrackJson(dbState, trackJson) {
     confidence: (typeof c.confidence === 'number' ? c.confidence : undefined)
   };
 
-  // --- Instrument extraction with finalInstruments priority ---
+  // --- Instrument extraction with broader finalInstruments priority (handles root-writer JSONs) ---
   const techMap = hintsTrueToInstruments(src?.technical?.audioHints || {});
   const instFromInstr = Array.isArray(src?.instrumentation?.instruments) ? src.instrumentation.instruments : [];
   
-  // Use finalInstruments (created by ffcalc.js) as primary source, with proper fallback chain
-  const instruments = finalInstruments.length > 0 
-    ? finalInstruments 
-    : Array.isArray(src?.analysis?.instruments) 
-      ? src.analysis.instruments 
-      : Array.isArray(creative?.instrument) 
-        ? creative.instrument 
-        : [];
+  const rootFinal      = Array.isArray(src?.finalInstruments)             ? src.finalInstruments             : [];
+  const analysisFinal  = Array.isArray(src?.analysis?.finalInstruments)   ? src.analysis.finalInstruments    : [];
+  const rootRaw        = Array.isArray(src?.instruments)                  ? src.instruments                  : [];
+  const analysisRaw    = Array.isArray(src?.analysis?.instruments)        ? src.analysis.instruments         : [];
+  const creativeList   = Array.isArray(creative?.instrument)              ? creative.instrument              : [];
+  
+  let instruments = (
+    (rootFinal.length     ? rootFinal     : null) ||
+    (analysisFinal.length ? analysisFinal : null) ||
+    (rootRaw.length       ? rootRaw       : null) ||
+    (analysisRaw.length   ? analysisRaw   : null) ||
+    (instFromInstr.length ? instFromInstr : null) ||
+    (creativeList.length  ? creativeList  : null) ||
+    techMap
+  );
+  
+  // Canonicalize section labels to match finalize_instruments.js and dedupe (stable order)
+  const canon = (s) => {
+    const t = String(s || '').trim();
+    if (t === 'Brass (section)' || t === 'Brass Section') return 'Brass';
+    if (t === 'Woodwinds (section)' || t === 'Woodwind')  return 'Woodwinds';
+    return t;
+  };
+  const seen = new Set();
+  instruments = (instruments || []).map(canon).filter(v => {
+    if (!v) return false;
+    if (seen.has(v)) return false;
+    seen.add(v);
+    return true;
+  });
   
   // For backward compatibility, maintain the old variable names for existing logic
   const instFromAnalysis = instruments;
@@ -118,14 +140,16 @@ function mergeFromTrackJson(dbState, trackJson) {
   
   // DEBUG: Log extracted instruments from each source
   console.log('[DEBUG] Extracted instruments from sources:');
-  console.log('[DEBUG] finalInstruments:', finalInstruments);
-  console.log('[DEBUG] instruments (primary):', instruments);
+  console.log('[DEBUG] rootFinal:', rootFinal);
+  console.log('[DEBUG] analysisFinal:', analysisFinal);
+  console.log('[DEBUG] rootRaw:', rootRaw);
+  console.log('[DEBUG] analysisRaw:', analysisRaw);
+  console.log('[DEBUG] creativeList:', creativeList);
   console.log('[DEBUG] instFromInstr:', instFromInstr);
-  console.log('[DEBUG] instFromAnalysis:', instFromAnalysis);
-  console.log('[DEBUG] instFromCreative:', instFromCreative);
   console.log('[DEBUG] techMap:', techMap);
-  console.log('[DEBUG] analysis.finalInstruments:', src?.analysis?.finalInstruments);
-  console.log('[DEBUG] analysis.instruments:', src?.analysis?.instruments);
+  console.log('[DEBUG] instruments (final):', instruments);
+  console.log('[DEBUG] src.finalInstruments:', src?.finalInstruments);
+  console.log('[DEBUG] src.analysis.finalInstruments:', src?.analysis?.finalInstruments);
   
   // Base precedence: instrumentation -> analysis -> creative -> technical hints
   let instrumentFallback = uniqCI(
