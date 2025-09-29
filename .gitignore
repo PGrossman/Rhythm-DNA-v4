@@ -2,9 +2,12 @@
 node_modules/
 app/py/.venv/
 
-# Large model files
+# Large model files (exclude specific large files but allow the models folder)
 app/models/xenova/Xenova/clap-htsat-unfused/onnx/model.onnx
 app/models/xenova/Xenova/ast-finetuned-audioset-10-10-0.4593/onnx/model.onnx
+
+# Allow the models folder to be tracked (override any previous exclusions)
+!app/models/
 
 # Large binary files
 node_modules/electron/dist/
