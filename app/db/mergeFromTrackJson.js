@@ -264,7 +264,7 @@ function mergeFromTrackJson(dbState, trackJson) {
     creative: {
       genre:      creative.genre,
       mood:       creative.mood,
-      instrument: creative.instrument,       // keep what the creative JSON said
+      instrument: instrumentFallback,        // use precedence result (analysis > creative)
       vocals:     creative.vocals,
       theme:      creative.theme,
       narrative:  creative.narrative || undefined,
