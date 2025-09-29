@@ -1,18 +1,28 @@
 /**
- * Finalize Instruments Helper
- * 
- * Provides canonical instrument normalization and deduplication
- * to ensure consistency between JSON and CSV outputs.
+ * Finalize Instruments Helper (v1.0.1)
+ *
+ * Canonicalizes section tokens and prunes family members:
+ *  - Canonical tokens: "Brass", "Woodwinds" (plural), "Strings"
+ *  - Removes "(section)" variants and singular/plural mismatches for woodwinds
+ *  - Removes individual family members if the family token is present
+ *
+ * Preserves ordering and does minimal, defensive transforms.
  */
 
 const CANON_ALIASES = {
-  // add common UI normalizations here (non-destructive)
+  // common UI normalizations -> canonical tokens (no "(section)" suffix)
   "Drum set": "Drum Kit (acoustic)",
   "Drums": "Drum Kit (acoustic)",
   "Electric organ": "Organ",
   "Hammond organ": "Organ",
-  "Strings": "Strings (section)",
-  "Brass": "Brass (section)",
+  // Canonicalize family-section forms to simple tokens
+  "Strings (section)": "Strings",
+  "Strings": "Strings",
+  "Brass (section)": "Brass",
+  "Brass": "Brass",
+  "Woodwinds (section)": "Woodwinds",
+  "Woodwinds": "Woodwinds",
+  "Woodwind": "Woodwinds",
   "Guitars": "Electric Guitar", // fallback if ever seen
 };
 
@@ -45,7 +55,6 @@ export function finalizeInstruments({
   }
 
   // Definition of families to aggregate
-  // BRASS_MEMBERS: only individual member instruments (do NOT include "Brass (section)")
   const BRASS_MEMBERS = new Set([
     "Trumpet",
     "Trombone",
@@ -56,7 +65,6 @@ export function finalizeInstruments({
     "Trumpet (mute)",
     "Trumpet (muted)"
   ]);
-  // WOODWIND_MEMBERS: only individual instruments (do NOT include "Woodwinds (section)" or "Woodwinds")
   const WOODWIND_MEMBERS = new Set([
     "Saxophone",
     "Alto Saxophone",
@@ -68,79 +76,109 @@ export function finalizeInstruments({
     "Bassoon",
     "Piccolo"
   ]);
+  // NEW: Strings members handling
+  const STRING_MEMBERS = new Set([
+    "Violin",
+    "Viola",
+    "Cello",
+    "Double Bass",
+    "Harp"
+  ]);
 
-  // Build a set for quick checks
+  // Build a mutable set representing current items
   const outSet = new Set(out);
 
-  // Collapse individual brass members into the family label, but preserve an explicit
-  // "Brass (section)" if the ensemble created it. Also ensure canonical "Brass" exists.
+  // --- Brass handling ---
   const hasBrassMember = [...BRASS_MEMBERS].some(m => outSet.has(m));
-  const hasBrassSection = outSet.has("Brass (section)");
+  const hasBrass = outSet.has("Brass");
 
-  if (hasBrassMember || hasBrassSection) {
-    // Remove only non-section member instruments
+  if (hasBrassMember || hasBrass) {
+    // Remove individual brass members
     for (const mem of BRASS_MEMBERS) {
       outSet.delete(mem);
     }
+    // Remove legacy section variant if present
+    outSet.delete("Brass (section)");
 
-    // Preserve explicit section tag if present; otherwise, add canonical section label
-    if (!outSet.has("Brass (section)")) {
-      outSet.add("Brass (section)");
-    }
-
-    // Also add normalized "Brass" for downstream expectations (keep both if necessary)
-    if (!outSet.has("Brass")) {
-      outSet.add("Brass");
-    }
+    // Ensure canonical "Brass" exists
+    outSet.add("Brass");
   }
 
-  // Collapse individual woodwind members into family label, but preserve explicit section tag
+  // --- Woodwinds handling ---
   const hasWoodMember = [...WOODWIND_MEMBERS].some(m => outSet.has(m));
-  const hasWoodSection = outSet.has("Woodwinds (section)");
+  const hasWoodwinds = outSet.has("Woodwinds");
 
-  if (hasWoodMember || hasWoodSection) {
+  if (hasWoodMember || hasWoodwinds) {
+    // Remove individual woodwind members
     for (const mem of WOODWIND_MEMBERS) {
       outSet.delete(mem);
     }
+    // Remove legacy section/singular variants if present
+    outSet.delete("Woodwinds (section)");
+    outSet.delete("Woodwind"); // defensive
 
-    if (!outSet.has("Woodwinds (section)")) {
-      outSet.add("Woodwinds (section)");
-    }
-
-    if (!outSet.has("Woodwinds")) {
-      outSet.add("Woodwinds");
-    }
+    // Ensure canonical "Woodwinds" exists
+    outSet.add("Woodwinds");
   }
 
-  // Preserve existing "Strings (section)" soft-guard behavior:
-  const S = new Set(Array.from(outSet));
-  const hasStringsSection = S.has("Strings (section)");
-  const hasBowed = ["Violin", "Viola", "Cello", "Double Bass"].some(x => S.has(x));
-  const hasPads = ["Organ", "Electric organ", "Hammond organ", "Keyboard", "Synth"].some(x => S.has(x));
-  if (hasStringsSection && !hasBowed && hasPads) {
-    S.delete("Strings (section)");
+  // --- Strings handling (new) ---
+  const hasStringMember = [...STRING_MEMBERS].some(m => outSet.has(m));
+  const hasStrings = outSet.has("Strings");
+
+  if (hasStringMember || hasStrings) {
+    // Remove individual string members
+    for (const mem of STRING_MEMBERS) {
+      outSet.delete(mem);
+    }
+    // Remove legacy section variant if present
+    outSet.delete("Strings (section)");
+
+    // Ensure canonical "Strings" exists
+    outSet.add("Strings");
   }
 
-  // Return an array preserving original insertion order where possible:
-  // Build final array by walking original 'out' and then appending any family labels that were newly added
+  // Strings soft-guard: if Strings exists but there are no bowed instruments and only pad-like instruments, remove Strings
+  const hasBowed = ["Violin", "Viola", "Cello", "Double Bass"].some(x => outSet.has(x));
+  const hasPads = ["Organ", "Electric organ", "Hammond organ", "Keyboard", "Synth"].some(x => outSet.has(x));
+  if (outSet.has("Strings") && !hasBowed && hasPads) {
+    outSet.delete("Strings");
+  }
+
+  // Preserve original order where possible: walk original 'out' and include items still present in outSet
   const final = [];
   const added = new Set();
-
-  // keep original instrument order for known items
   for (const i of out) {
-    if (S.has(i) && !added.has(i)) {
+    if (outSet.has(i) && !added.has(i)) {
       final.push(i);
       added.add(i);
     }
   }
-  // finally, if family labels exist but were not in original order, append them
-  for (const f of ["Brass", "Woodwinds"]) {
-    if (S.has(f) && !added.has(f)) {
+
+  // Append any canonical family labels that exist but were not in original order
+  for (const f of ["Brass", "Woodwinds", "Strings"]) {
+    if (outSet.has(f) && !added.has(f)) {
       final.push(f);
       added.add(f);
     }
   }
-  return final;
+
+  // Ensure canonical capitalization for known family tokens (defensive)
+  const canonicalizeCapitalization = inst => {
+    if (typeof inst !== "string") return inst;
+    const low = inst.toLowerCase();
+    if (low === "brass") return "Brass";
+    if (low === "woodwinds") return "Woodwinds";
+    if (low === "strings") return "Strings";
+    return inst;
+  };
+
+  const finalCanonical = final.map(canonicalizeCapitalization);
+
+  // Debug log (single concise line)
+  if (typeof log === "function") log(`[FINALIZE] canonicalized instruments -> ${finalCanonical.join(", ")}`);
+  else console.log(`[FINALIZE] canonicalized instruments -> ${finalCanonical.join(", ")}`);
+
+  return finalCanonical;
 }
 
 export function buildSourceFlags({ ensembleInstruments = [], probeRescues = [], additional = [] } = {}) {
