@@ -4858,7 +4858,26 @@ def analyze(audio_path: str, use_demucs: bool = True, diag: bool = False) -> Dic
         if "Brass (section)" in current_instruments:
             # Check if any brass child has pos_ratio > 0
             has_brass_pos = any(_has_pos(decision_trace, child) for child in brass_children)
-            if not has_brass_pos:
+
+            # If no child shows pos_ratio, we used to unconditionally remove the section.
+            # However, boosters (e.g., mix_only_brass_v1) may legitimately add the section
+            # based on generic evidence. Preserve the section if a brass booster signalled pass
+            # or explicitly added "Brass (section)" in the decision trace.
+            try:
+                boosters = decision_trace if isinstance(decision_trace, dict) else {}
+                boosts_map = boosters.get("boosts", {}) if isinstance(boosters, dict) else {}
+
+                # Normalized access for the specific brass booster entry
+                brass_boost = boosts_map.get("mix_only_brass_v1", {}) if isinstance(boosts_map, dict) else {}
+
+                # Consider the booster "passed" if it sets 'pass' truthy or explicitly lists "Brass (section)" in its added list
+                booster_pass = bool(brass_boost.get("pass")) or ("Brass (section)" in (brass_boost.get("added") or []))
+            except Exception:
+                # Defensive fallback: if anything goes wrong inspecting the trace, treat booster_pass as False
+                booster_pass = False
+
+            # Only remove the section if there is no child pos evidence AND no brass booster approval.
+            if (not has_brass_pos) and (not booster_pass):
                 current_instruments.remove("Brass (section)")
         
         # Strings grouping: ensure "Strings (section)" requires pos_ratio > 0
