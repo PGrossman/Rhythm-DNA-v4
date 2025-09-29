@@ -81,6 +81,9 @@ function mergeFromTrackJson(dbState, trackJson) {
     return dbState;
   }
 
+  // Extract finalInstruments from analysis (created by ffcalc.js)
+  const finalInstruments = src?.analysis?.finalInstruments || [];
+
   // --- Creative fields (source of truth from per-track JSON) ---
   const creativeRaw = src.creative || {};
   // Some runs used creative.json.{...}; support both:
@@ -96,21 +99,27 @@ function mergeFromTrackJson(dbState, trackJson) {
     confidence: (typeof c.confidence === 'number' ? c.confidence : undefined)
   };
 
-  // --- Instrument fallback precedence (instrumentation > analysis > creative > technical.audioHints) ---
+  // --- Instrument extraction with finalInstruments priority ---
   const techMap = hintsTrueToInstruments(src?.technical?.audioHints || {});
   const instFromInstr = Array.isArray(src?.instrumentation?.instruments) ? src.instrumentation.instruments : [];
-  // Use finalInstruments (cleaned/deduplicated) if available, fallback to raw instruments
-  const instFromAnalysis = Array.isArray(src?.analysis?.finalInstruments)
-                            ? src.analysis.finalInstruments
-                            : Array.isArray(src?.analysis?.final_instruments) 
-                              ? src.analysis.final_instruments
-                              : Array.isArray(src?.analysis?.instruments) 
-                                ? src.analysis.instruments 
-                                : [];
+  
+  // Use finalInstruments (created by ffcalc.js) as primary source, with proper fallback chain
+  const instruments = finalInstruments.length > 0 
+    ? finalInstruments 
+    : Array.isArray(src?.analysis?.instruments) 
+      ? src.analysis.instruments 
+      : Array.isArray(creative?.instrument) 
+        ? creative.instrument 
+        : [];
+  
+  // For backward compatibility, maintain the old variable names for existing logic
+  const instFromAnalysis = instruments;
   const instFromCreative = Array.isArray(creative.instrument) ? creative.instrument : [];
   
   // DEBUG: Log extracted instruments from each source
   console.log('[DEBUG] Extracted instruments from sources:');
+  console.log('[DEBUG] finalInstruments:', finalInstruments);
+  console.log('[DEBUG] instruments (primary):', instruments);
   console.log('[DEBUG] instFromInstr:', instFromInstr);
   console.log('[DEBUG] instFromAnalysis:', instFromAnalysis);
   console.log('[DEBUG] instFromCreative:', instFromCreative);
@@ -263,7 +272,7 @@ function mergeFromTrackJson(dbState, trackJson) {
   const nowISO = new Date().toISOString();
   
   // DEBUG: Log what we're about to save
-  console.log('[DEBUG] About to save track with instruments:', instrumentFallback);
+  console.log('[DEBUG] About to save track with instruments:', instruments);
   console.log('[DEBUG] Track key:', key);
   console.log('[DEBUG] Previous track data:', prevR);
   
@@ -283,7 +292,7 @@ function mergeFromTrackJson(dbState, trackJson) {
     creative: {
       genre:      creative.genre,
       mood:       creative.mood,
-      instrument: instrumentFallback,        // use precedence result (analysis > creative)
+      instrument: instruments,               // use finalInstruments from ffcalc.js
       vocals:     creative.vocals,
       theme:      creative.theme,
       narrative:  creative.narrative || undefined,
@@ -301,7 +310,7 @@ function mergeFromTrackJson(dbState, trackJson) {
   const prevC = dbState.criteria?.[key] || {};
   
   // DEBUG: Log criteria update
-  console.log('[DEBUG] Updating criteria with instruments:', instrumentFallback);
+  console.log('[DEBUG] Updating criteria with instruments:', instruments);
   console.log('[DEBUG] Previous criteria data:', prevC);
   
   dbState.criteria = dbState.criteria || {};
@@ -309,7 +318,7 @@ function mergeFromTrackJson(dbState, trackJson) {
     // facets
     genre:      creative.genre,
     mood:       creative.mood,
-    instrument: instrumentFallback,   // use precedence result
+    instrument: instruments,           // use finalInstruments from ffcalc.js
     vocals:     creative.vocals,
     theme:      creative.theme,
     // keep any additional buckets you already track (tempoBands, etc.)
