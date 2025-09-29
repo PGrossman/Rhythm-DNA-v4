@@ -46,13 +46,51 @@ function snakeOrCamel(obj, ...keys) {
 
 // Combine/normalize result from Python into a stable shape
 function normalizePyResult(parsed) {
-  const instruments = snakeOrCamel(parsed, "instruments") || [];
+  // Normalize core fields with snakeOrCamel helper.
+  // We defensively clone the instruments array if present so we can safely mutate it.
+  const rawInstruments = snakeOrCamel(parsed, "instruments");
+  const instruments = Array.isArray(rawInstruments) ? [...rawInstruments] : [];
   const decisionTrace = snakeOrCamel(parsed, "decision_trace", "decisionTrace") || {};
   const usedDemucs = snakeOrCamel(parsed, "used_demucs", "usedDemucs") ?? false;
   const byStem = snakeOrCamel(parsed, "by_stem", "byStem") || {};
   const instrumentSource = snakeOrCamel(parsed, "instrument_source", "instrumentSource") || "ensemble";
   const scores = snakeOrCamel(parsed, "scores") || {};
 
+  // --- BEGIN: Merge booster 'added' instruments (if any) into instruments ---
+  // Rationale: Python boosters may add instruments under decision_trace.boosts.*.added
+  // (e.g., "Brass (section)"). Downstream code expects those to be present on the
+  // canonical `instruments` array. Merge here where the full parsed payload exists.
+  try {
+    const boosts = decisionTrace && typeof decisionTrace === "object" ? (decisionTrace.boosts || {}) : {};
+    const boosterAdded = [];
+
+    for (const boostEntry of Object.values(boosts || {})) {
+      if (!boostEntry || typeof boostEntry !== "object") continue;
+      const added = Array.isArray(boostEntry.added) ? boostEntry.added
+                  : Array.isArray(boostEntry.add) ? boostEntry.add
+                  : [];
+      if (!Array.isArray(added)) continue;
+      for (const inst of added) {
+        // Only push non-empty, non-duplicate instrument strings
+        if (inst && typeof inst === "string" && !instruments.includes(inst)) {
+          instruments.push(inst);
+          boosterAdded.push(inst);
+        }
+      }
+    }
+
+    if (boosterAdded.length) {
+      // Use existing log helper (defined at top of file). Fallback is unnecessary here
+      // because `log` is present in this module, but keep message concise.
+      log(`[ENSEMBLE] Added from boosters: ${boosterAdded.join(", ")}`);
+    }
+  } catch (e) {
+    // Non-fatal: log a warning and continue returning whatever we have
+    warn("normalizePyResult booster-merge failed:", e?.message || e);
+  }
+  // --- END: Merge booster 'added' instruments ---
+
+  // Return unchanged shape, with instruments now potentially augmented by boosters.
   return { instruments, decisionTrace, usedDemucs, byStem, instrumentSource, scores };
 }
 
