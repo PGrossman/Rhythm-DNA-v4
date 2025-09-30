@@ -1449,8 +1449,14 @@ async function analyzeMp3(filePath, win = null, model = 'qwen3:8b', dbFolder = n
     console.log('[AUDIO_PROBE] Error:', e.message);
   }
   
-  // ... after you have `probe` and `probes` (with probes.hints), and before writing files:
-
+  
+  // === v1.0.0: Start Instrumentation immediately after probes complete ===
+  console.log('[ORCHESTRATION] Audio probes complete, starting Instrumentation in parallel with Technical (BPM + ID3)');
+  
+  emitInstrumentationProgress(win, filePath, 0, 'processing');
+  const instrumentationPromise = runInstrumentationAnalysis(filePath, win, probes.hints || {});
+  
+  // === Continue Technical analysis (BPM + ID3) in parallel ===
   const durSec = probe?.duration_sec || probe?.duration || 0;
   let tempoSource = 'thirds';
   let finalBpm = await estimateTempoThirds(filePath, durSec, probes?.hints || {});
@@ -1459,14 +1465,13 @@ async function analyzeMp3(filePath, win = null, model = 'qwen3:8b', dbFolder = n
     finalBpm = await estimateTempoACF(filePath, durSec, probes?.hints || {});
     tempoSource = 'acf_fallback';
   }
-  console.log(`[BPM-FINAL] ${baseName}: ${finalBpm ?? 'NULL'}`);
+  console.log(`[BPM-FINAL] ${baseName}: ${finalBpm ? finalBpm.toFixed(1) + ' BPM (' + tempoSource + ')' : 'NULL'}`);
 
   
   // Extract ID3 tags
   let id3Tags = {};
   try {
     const metadata = await mm.parseFile(filePath);
-    // Helper to find ID3v2 frame across versions
     const findFrame = (id) => {
       for (const version of ['ID3v2.4', 'ID3v2.3', 'ID3v2.2']) {
         const frame = metadata.native?.[version]?.find?.(t => t.id === id);
@@ -1498,7 +1503,8 @@ async function analyzeMp3(filePath, win = null, model = 'qwen3:8b', dbFolder = n
   }
 
   
-  // Send technical complete, creative starting event
+  // === v1.0.0: Technical complete - now start Creative ===
+  console.log('[ORCHESTRATION] Technical complete (BPM + ID3), starting Creative');
   if (win) {
     win.webContents.send('jobProgress', {
       trackId: filePath,
@@ -1515,11 +1521,7 @@ async function analyzeMp3(filePath, win = null, model = 'qwen3:8b', dbFolder = n
   }
   const dir = path.dirname(filePath);
   
-  // v1.0.0: Parallel orchestration - start all phases immediately after probe
-  // Start instrumentation immediately after probe data is available
-  emitInstrumentationProgress(win, filePath, 0, 'processing');
-  
-  // Run creative analysis in parallel
+  // Run creative analysis (requires finalBpm from Technical)
   const creativePromise = runCreativeAnalysis(
     baseName,
     finalBpm,
@@ -1527,14 +1529,14 @@ async function analyzeMp3(filePath, win = null, model = 'qwen3:8b', dbFolder = n
     probes.hints || {}
   );
   
-  // Run instrumentation analysis in parallel
-  const instrumentationPromise = runInstrumentationAnalysis(filePath, win, probes.hints || {});
-  
-  // Wait for both to complete
+  // Wait for both Creative and Instrumentation (which started earlier) to complete
+  console.log('[ORCHESTRATION] Waiting for Creative and Instrumentation to complete...');
   const [creativeResult, instrumentationResult] = await Promise.all([
     creativePromise,
     instrumentationPromise
   ]);
+  
+  console.log('[ORCHESTRATION] All analysis phases complete');
   
   // Process creative results
   let creative = (creativeResult && creativeResult.data) || {};
