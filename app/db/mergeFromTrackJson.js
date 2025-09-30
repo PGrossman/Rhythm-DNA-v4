@@ -74,6 +74,13 @@ function hintsTrueToInstruments(audioHints = {}) {
  */
 function mergeFromTrackJson(dbState, trackJson) {
   const src = trackJson || {};
+  
+  // DEBUG: Raw JSON instrument data
+  console.log('[DEBUG] Raw JSON finalInstruments:', src.finalInstruments);
+  console.log('[DEBUG] Raw JSON instruments:', src.instruments);
+  console.log('[DEBUG] Raw JSON analysis.finalInstruments:', src.analysis?.finalInstruments);
+  console.log('[DEBUG] Raw JSON analysis.instruments:', src.analysis?.instruments);
+  
   const key = normalizeKey(src?.source?.filePath || src?.source?.fileName || '');
   
   if (!key) {
@@ -133,6 +140,11 @@ function mergeFromTrackJson(dbState, trackJson) {
     seen.add(v);
     return true;
   });
+  
+  // DEBUG: Extracted instruments array
+  console.log('[DEBUG] Extracted instruments array:', instruments);
+  console.log('[DEBUG] Instruments array length:', instruments.length);
+  console.log('[DEBUG] Instruments array type:', typeof instruments);
   
   // For backward compatibility, maintain the old variable names for existing logic
   const instFromAnalysis = instruments;
@@ -333,9 +345,12 @@ function mergeFromTrackJson(dbState, trackJson) {
   // --- CriteriaDB write/merge (what the Search UI facets read) ---
   const prevC = dbState.criteria?.[key] || {};
   
-  // DEBUG: Log criteria update
-  console.log('[DEBUG] Updating criteria with instruments:', instruments);
-  console.log('[DEBUG] Previous criteria data:', prevC);
+  // DEBUG: About to add instruments to criteria
+  console.log('[DEBUG] About to add instruments to criteria');
+  console.log('[DEBUG] Current criteria.instrument:', prevC.instrument);
+  console.log('[DEBUG] Instruments to add:', instruments);
+  console.log('[DEBUG] Instruments type:', typeof instruments);
+  console.log('[DEBUG] Instruments is array:', Array.isArray(instruments));
   
   dbState.criteria = dbState.criteria || {};
   dbState.criteria[key] = {
@@ -348,6 +363,10 @@ function mergeFromTrackJson(dbState, trackJson) {
     // keep any additional buckets you already track (tempoBands, etc.)
     tempoBands: prevC.tempoBands || []
   };
+  
+  // DEBUG: Final criteria.instrument
+  console.log('[DEBUG] Final criteria.instrument:', dbState.criteria[key].instrument);
+  console.log('[DEBUG] Final criteria.instrument length:', dbState.criteria[key].instrument?.length);
 
   // DEBUG: Log final database state
   console.log('[DEBUG] Final database state for track:', key);
