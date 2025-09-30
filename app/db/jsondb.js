@@ -206,17 +206,24 @@ async function rebuildCriteria(paths) {
       for (const v of toArray(creative[k])) add(k, v);
     }
     
-    // instruments — prefer canonical analysis, then safe fallbacks
-    if (Array.isArray(an.instruments) && an.instruments.length) {
+    // instruments — prefer canonical creative.instrument (set by mergeTrack), then analysis fields, then fallbacks
+    if (Array.isArray(creative.instrument) && creative.instrument.length) {
+      // Priority 1: creative.instrument (set by mergeTrack from finalInstruments/instruments/suggestedInstruments)
+      creative.instrument.forEach(v => add('instrument', v));
+    } else if (Array.isArray(an.finalInstruments) && an.finalInstruments.length) {
+      // Priority 2: analysis.finalInstruments (canonicalized, deduplicated)
+      an.finalInstruments.forEach(v => add('instrument', v));
+    } else if (Array.isArray(an.instruments) && an.instruments.length) {
+      // Priority 3: analysis.instruments (raw from ensemble)
       an.instruments.forEach(v => add('instrument', v));
     } else if (Array.isArray(t.instruments) && t.instruments.length) {
-      // legacy: some tracks may have been flattened with instruments at top-level
+      // Priority 4: top-level instruments (legacy flattened structure)
       t.instruments.forEach(v => add('instrument', v));
     } else if (Array.isArray(an.instruments_ensemble) && an.instruments_ensemble.length) {
-      // legacy: ensemble-only field (pre-normalization)
+      // Priority 5: ensemble-only field (legacy pre-normalization)
       an.instruments_ensemble.forEach(v => add('instrument', v));
     } else if (creative && creative.suggestedInstruments) {
-      // last resort: creative text
+      // Priority 6: creative.suggestedInstruments (last resort: raw LLM output)
       const arr = Array.isArray(creative.suggestedInstruments)
         ? creative.suggestedInstruments
         : String(creative.suggestedInstruments).split(/,|\/|;|\\|·|•/);
