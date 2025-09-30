@@ -1513,12 +1513,7 @@ async function analyzeMp3(filePath, win = null, model = 'qwen3:8b', dbFolder = n
       status: 'PROCESSING',
       note: 'Starting creative analysis with Ollama...'
     });
-    win.webContents.send('jobProgress', {
-      trackId: filePath,
-      stage: 'instrumentation',
-      status: 'PROCESSING',
-      note: 'Starting instrumentation analysis...'
-    });
+    // Removed competing instrumentation progress event - runInstrumentationAnalysis handles its own start event
   }
   const dir = path.dirname(filePath);
   
