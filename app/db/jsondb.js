@@ -69,6 +69,13 @@ function tempoToBand(bpm) {
 
 function mergeTrack(oldRec = {}, newRec = {}) {
   const out = { ...oldRec };
+  
+  // DEBUG: Log the incoming data to see what we're working with
+  console.log('[DEBUG] mergeTrack called with newRec.analysis:', newRec.analysis);
+  console.log('[DEBUG] newRec.creative.instrument:', newRec.creative?.instrument);
+  console.log('[DEBUG] newRec.analysis?.finalInstruments:', newRec.analysis?.finalInstruments);
+  console.log('[DEBUG] newRec.analysis?.instruments:', newRec.analysis?.instruments);
+  
   const scalarKeys = [
     'file','path','analyzed_at','title','artist','waveform_png','duration_sec','sample_rate_hz','channels',
     'bit_rate','lufs_integrated','loudness_range','true_peak_db','estimated_tempo_bpm','key'
@@ -80,11 +87,31 @@ function mergeTrack(oldRec = {}, newRec = {}) {
   const cOld = oldRec.creative || {};
   const cNew = newRec.creative || {};
   const cOut = { ...cOld };
-  for (const k of ['genre','mood','instrument','vocals','theme']) {
+  
+  // DEBUG: Before instrument merging
+  console.log('[DEBUG] About to merge instruments - cOld.instrument:', cOld.instrument, 'cNew.instrument:', cNew.instrument);
+  
+  // Special handling for instruments - use finalInstruments if available
+  let instrumentsToMerge = cNew.instrument;
+  if (newRec.analysis?.finalInstruments && Array.isArray(newRec.analysis.finalInstruments) && newRec.analysis.finalInstruments.length > 0) {
+    instrumentsToMerge = newRec.analysis.finalInstruments;
+    console.log('[DEBUG] Using finalInstruments instead of creative.instrument:', instrumentsToMerge);
+  } else if (newRec.analysis?.instruments && Array.isArray(newRec.analysis.instruments) && newRec.analysis.instruments.length > 0) {
+    instrumentsToMerge = newRec.analysis.instruments;
+    console.log('[DEBUG] Using analysis.instruments instead of creative.instrument:', instrumentsToMerge);
+  }
+  
+  for (const k of ['genre','mood','vocals','theme']) {
     const a = toArray(cOld[k]);
     const b = toArray(cNew[k]);
     cOut[k] = unionInto(a.slice(), b);
   }
+  
+  // Handle instruments separately with the extracted data
+  const a = toArray(cOld.instrument);
+  const b = toArray(instrumentsToMerge);
+  cOut.instrument = unionInto(a.slice(), b);
+  console.log('[DEBUG] Final merged instruments:', cOut.instrument);
   if (typeof cNew.narrative === 'string' && cNew.narrative.trim()) cOut.narrative = cNew.narrative;
   if (Number.isFinite(cNew.confidence)) cOut.confidence = cNew.confidence;
   out.creative = cOut;
