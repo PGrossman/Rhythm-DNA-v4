@@ -76,10 +76,17 @@ function mergeFromTrackJson(dbState, trackJson) {
   const src = trackJson || {};
   
   // DEBUG: Raw JSON instrument data
-  console.log('[DEBUG] Raw JSON finalInstruments:', src.finalInstruments);
-  console.log('[DEBUG] Raw JSON instruments:', src.instruments);
-  console.log('[DEBUG] Raw JSON analysis.finalInstruments:', src.analysis?.finalInstruments);
-  console.log('[DEBUG] Raw JSON analysis.instruments:', src.analysis?.instruments);
+  if (typeof log === 'function') {
+    log('[DEBUG] Raw JSON finalInstruments:', src.finalInstruments);
+    log('[DEBUG] Raw JSON instruments:', src.instruments);
+    log('[DEBUG] Raw JSON analysis.finalInstruments:', src.analysis?.finalInstruments);
+    log('[DEBUG] Raw JSON analysis.instruments:', src.analysis?.instruments);
+  } else {
+    console.log('[DEBUG] Raw JSON finalInstruments:', src.finalInstruments);
+    console.log('[DEBUG] Raw JSON instruments:', src.instruments);
+    console.log('[DEBUG] Raw JSON analysis.finalInstruments:', src.analysis?.finalInstruments);
+    console.log('[DEBUG] Raw JSON analysis.instruments:', src.analysis?.instruments);
+  }
   
   const key = normalizeKey(src?.source?.filePath || src?.source?.fileName || '');
   
@@ -142,9 +149,15 @@ function mergeFromTrackJson(dbState, trackJson) {
   });
   
   // DEBUG: Extracted instruments array
-  console.log('[DEBUG] Extracted instruments array:', instruments);
-  console.log('[DEBUG] Instruments array length:', instruments.length);
-  console.log('[DEBUG] Instruments array type:', typeof instruments);
+  if (typeof log === 'function') {
+    log('[DEBUG] Extracted instruments array:', instruments);
+    log('[DEBUG] Instruments array length:', instruments.length);
+    log('[DEBUG] Instruments array type:', typeof instruments);
+  } else {
+    console.log('[DEBUG] Extracted instruments array:', instruments);
+    console.log('[DEBUG] Instruments array length:', instruments.length);
+    console.log('[DEBUG] Instruments array type:', typeof instruments);
+  }
   
   // For backward compatibility, maintain the old variable names for existing logic
   const instFromAnalysis = instruments;
@@ -346,11 +359,19 @@ function mergeFromTrackJson(dbState, trackJson) {
   const prevC = dbState.criteria?.[key] || {};
   
   // DEBUG: About to add instruments to criteria
-  console.log('[DEBUG] About to add instruments to criteria');
-  console.log('[DEBUG] Current criteria.instrument:', prevC.instrument);
-  console.log('[DEBUG] Instruments to add:', instruments);
-  console.log('[DEBUG] Instruments type:', typeof instruments);
-  console.log('[DEBUG] Instruments is array:', Array.isArray(instruments));
+  if (typeof log === 'function') {
+    log('[DEBUG] About to add instruments to criteria');
+    log('[DEBUG] Current criteria.instrument:', prevC.instrument);
+    log('[DEBUG] Instruments to add:', instruments);
+    log('[DEBUG] Instruments type:', typeof instruments);
+    log('[DEBUG] Instruments is array:', Array.isArray(instruments));
+  } else {
+    console.log('[DEBUG] About to add instruments to criteria');
+    console.log('[DEBUG] Current criteria.instrument:', prevC.instrument);
+    console.log('[DEBUG] Instruments to add:', instruments);
+    console.log('[DEBUG] Instruments type:', typeof instruments);
+    console.log('[DEBUG] Instruments is array:', Array.isArray(instruments));
+  }
   
   dbState.criteria = dbState.criteria || {};
   dbState.criteria[key] = {
@@ -365,14 +386,29 @@ function mergeFromTrackJson(dbState, trackJson) {
   };
   
   // DEBUG: Final criteria.instrument
-  console.log('[DEBUG] Final criteria.instrument:', dbState.criteria[key].instrument);
-  console.log('[DEBUG] Final criteria.instrument length:', dbState.criteria[key].instrument?.length);
+  if (typeof log === 'function') {
+    log('[DEBUG] Final criteria.instrument:', dbState.criteria[key].instrument);
+    log('[DEBUG] Final criteria.instrument length:', dbState.criteria[key].instrument?.length);
+  } else {
+    console.log('[DEBUG] Final criteria.instrument:', dbState.criteria[key].instrument);
+    console.log('[DEBUG] Final criteria.instrument length:', dbState.criteria[key].instrument?.length);
+  }
 
   // DEBUG: Log final database state
-  console.log('[DEBUG] Final database state for track:', key);
-  console.log('[DEBUG] RhythmDB instruments:', dbState.rhythm.tracks[key]?.creative?.instrument);
-  console.log('[DEBUG] CriteriaDB instruments:', dbState.criteria[key]?.instrument);
-  console.log('[DEBUG] Analysis instruments:', dbState.rhythm.tracks[key]?.analysis?.instruments);
+  if (typeof log === 'function') {
+    log('[DEBUG] Final database state for track:', key);
+    log('[DEBUG] RhythmDB instruments:', dbState.rhythm.tracks[key]?.creative?.instrument);
+    log('[DEBUG] CriteriaDB instruments:', dbState.criteria[key]?.instrument);
+  } else {
+    console.log('[DEBUG] Final database state for track:', key);
+    console.log('[DEBUG] RhythmDB instruments:', dbState.rhythm.tracks[key]?.creative?.instrument);
+    console.log('[DEBUG] CriteriaDB instruments:', dbState.criteria[key]?.instrument);
+  }
+  if (typeof log === 'function') {
+    log('[DEBUG] Analysis instruments:', dbState.rhythm.tracks[key]?.analysis?.instruments);
+  } else {
+    console.log('[DEBUG] Analysis instruments:', dbState.rhythm.tracks[key]?.analysis?.instruments);
+  }
   
   console.log('[DB] Merged track JSON:', key, '-', instrumentFallback.length, 'instruments,', creative.genre.length, 'genres');
   return dbState;
