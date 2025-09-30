@@ -90,15 +90,35 @@ function mergeTrack(oldRec = {}, newRec = {}) {
   
   // DEBUG: Before instrument merging
   console.log('[DEBUG] About to merge instruments - cOld.instrument:', cOld.instrument, 'cNew.instrument:', cNew.instrument);
+  console.log('[DEBUG] cNew.suggestedInstruments:', cNew.suggestedInstruments);
   
-  // Special handling for instruments - use finalInstruments if available
-  let instrumentsToMerge = cNew.instrument;
-  if (newRec.analysis?.finalInstruments && Array.isArray(newRec.analysis.finalInstruments) && newRec.analysis.finalInstruments.length > 0) {
-    instrumentsToMerge = newRec.analysis.finalInstruments;
-    console.log('[DEBUG] Using finalInstruments instead of creative.instrument:', instrumentsToMerge);
-  } else if (newRec.analysis?.instruments && Array.isArray(newRec.analysis.instruments) && newRec.analysis.instruments.length > 0) {
-    instrumentsToMerge = newRec.analysis.instruments;
-    console.log('[DEBUG] Using analysis.instruments instead of creative.instrument:', instrumentsToMerge);
+  // Special handling for instruments - priority: finalInstruments > instruments > suggestedInstruments > instrument
+  let instrumentsToMerge = null;
+  
+  // Priority 1: analysis.finalInstruments (canonicalized, deduplicated)
+  if (newRec.finalInstruments && Array.isArray(newRec.finalInstruments) && newRec.finalInstruments.length > 0) {
+    instrumentsToMerge = newRec.finalInstruments;
+    console.log('[DEBUG] Using root finalInstruments:', instrumentsToMerge);
+  }
+  // Priority 2: analysis.instruments (raw from ensemble)
+  else if (newRec.instruments && Array.isArray(newRec.instruments) && newRec.instruments.length > 0) {
+    instrumentsToMerge = newRec.instruments;
+    console.log('[DEBUG] Using root instruments:', instrumentsToMerge);
+  }
+  // Priority 3: creative.suggestedInstruments (from LLM)
+  else if (cNew.suggestedInstruments && Array.isArray(cNew.suggestedInstruments) && cNew.suggestedInstruments.length > 0) {
+    instrumentsToMerge = cNew.suggestedInstruments;
+    console.log('[DEBUG] Using creative.suggestedInstruments:', instrumentsToMerge);
+  }
+  // Priority 4: creative.instrument (legacy)
+  else if (cNew.instrument) {
+    instrumentsToMerge = cNew.instrument;
+    console.log('[DEBUG] Using creative.instrument:', instrumentsToMerge);
+  }
+  // Fallback: empty array
+  else {
+    instrumentsToMerge = [];
+    console.log('[DEBUG] No instruments found, using empty array');
   }
   
   for (const k of ['genre','mood','vocals','theme']) {
