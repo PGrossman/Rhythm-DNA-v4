@@ -1450,13 +1450,8 @@ async function analyzeMp3(filePath, win = null, model = 'qwen3:8b', dbFolder = n
   }
   
   
-  // === v1.0.0: Start Instrumentation immediately after probes complete ===
-  console.log('[ORCHESTRATION] Audio probes complete, starting Instrumentation in parallel with Technical (BPM + ID3)');
-  
-  emitInstrumentationProgress(win, filePath, 0, 'processing');
-  const instrumentationPromise = runInstrumentationAnalysis(filePath, win, probes.hints || {});
-  
-  // === Continue Technical analysis (BPM + ID3) in parallel ===
+  // === v1.0.0: Complete Technical analysis (BPM + ID3) first ===
+  console.log('[ORCHESTRATION] Audio probes complete, continuing Technical analysis (BPM + ID3)');
   const durSec = probe?.duration_sec || probe?.duration || 0;
   let tempoSource = 'thirds';
   let finalBpm = await estimateTempoThirds(filePath, durSec, probes?.hints || {});
@@ -1503,8 +1498,8 @@ async function analyzeMp3(filePath, win = null, model = 'qwen3:8b', dbFolder = n
   }
 
   
-  // === v1.0.0: Technical complete - now start Creative ===
-  console.log('[ORCHESTRATION] Technical complete (BPM + ID3), starting Creative');
+  // === v1.0.0: Technical complete - now start Creative and Instrumentation in parallel ===
+  console.log('[ORCHESTRATION] Technical complete (BPM + ID3), starting Creative and Instrumentation in parallel');
   if (win) {
     win.webContents.send('jobProgress', {
       trackId: filePath,
@@ -1518,10 +1513,16 @@ async function analyzeMp3(filePath, win = null, model = 'qwen3:8b', dbFolder = n
       status: 'PROCESSING',
       note: 'Starting creative analysis with Ollama...'
     });
+    win.webContents.send('jobProgress', {
+      trackId: filePath,
+      stage: 'instrumentation',
+      status: 'PROCESSING',
+      note: 'Starting instrumentation analysis...'
+    });
   }
   const dir = path.dirname(filePath);
   
-  // Run creative analysis (requires finalBpm from Technical)
+  // Start both Creative and Instrumentation in parallel (both have all required Technical outputs)
   const creativePromise = runCreativeAnalysis(
     baseName,
     finalBpm,
@@ -1529,7 +1530,9 @@ async function analyzeMp3(filePath, win = null, model = 'qwen3:8b', dbFolder = n
     probes.hints || {}
   );
   
-  // Wait for both Creative and Instrumentation (which started earlier) to complete
+  const instrumentationPromise = runInstrumentationAnalysis(filePath, win, probes.hints || {});
+  
+  // Wait for both to complete
   console.log('[ORCHESTRATION] Waiting for Creative and Instrumentation to complete...');
   const [creativeResult, instrumentationResult] = await Promise.all([
     creativePromise,
