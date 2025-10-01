@@ -133,8 +133,10 @@ function analyzeWithEnsemble(audioPath, opts = {}) {
       }
 
       // Set up Python environment with log directory
+      // v1.3.0: Add PYTHONDONTWRITEBYTECODE to prevent any bytecode caching
       const pyEnv = Object.assign({}, process.env, {
-        ENSEMBLE_LOG_DIR: LOG_DIR  // tells Python where to dump its own debug file(s)
+        ENSEMBLE_LOG_DIR: LOG_DIR,  // tells Python where to dump its own debug file(s)
+        PYTHONDONTWRITEBYTECODE: "1"  // Prevents .pyc files and forces fresh code loading
       });
 
       const baseName = path.basename(audioPath || 'unknown');
