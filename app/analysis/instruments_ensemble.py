@@ -786,7 +786,14 @@ def _apply_mix_only_strings_v1(per_model, instruments, decision_trace):
     piano_mean   = cm("piano")
     brass_mean   = cm("brass")
 
-    gate_ok = (piano_mean >= TH["gate"]["piano"]) or (brass_mean >= TH["gate"]["brass"])
+    # v1.3.0: Stricter orchestral context - require BOTH piano AND brass present
+    # This prevents false orchestral contexts in pop mixes with weak piano/brass
+    piano_gate_pass = (piano_mean >= TH["gate"]["piano"])
+    brass_gate_pass = (brass_mean >= TH["gate"]["brass"])
+    
+    # True orchestral context: both present OR very strong combined evidence
+    strong_combined = (piano_mean + brass_mean) >= 0.014
+    gate_ok = (piano_gate_pass and brass_gate_pass) or strong_combined
     
     # v1.2.0: Optional micro check - if individual string instruments are detected, at least one should have pos >= 0.004
     # But don't block if only generic "strings" label exists (common in orchestral mixes)
