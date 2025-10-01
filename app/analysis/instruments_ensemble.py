@@ -4927,9 +4927,20 @@ def analyze(audio_path: str, use_demucs: bool = True, diag: bool = False) -> Dic
                 current_instruments.remove("Brass (section)")
         
         # Strings grouping: ensure "Strings (section)" requires pos_ratio > 0
+        # v1.2.0: Skip removal if strong orchestral context (real strings can have pos=0 in dense mixes)
         if "Strings (section)" in current_instruments:
             if not _has_pos(decision_trace, "strings"):
-                current_instruments.remove("Strings (section)")
+                # Check for orchestral context before removing
+                per_model = decision_trace.get("per_model", {})
+                panns_means = per_model.get("panns", {}).get("mean_probs", {})
+                yamnet_means = per_model.get("yamnet", {}).get("mean_probs", {})
+                piano_mean = panns_means.get("piano", 0.0) + yamnet_means.get("piano", 0.0)
+                brass_mean = panns_means.get("brass", 0.0) + yamnet_means.get("brass", 0.0)
+                strong_orchestral_context = (piano_mean >= 0.007) and (brass_mean >= 0.0075)
+                
+                # Only remove if NOT in orchestral context
+                if not strong_orchestral_context:
+                    current_instruments.remove("Strings (section)")
         
         out["instruments"] = current_instruments
         
