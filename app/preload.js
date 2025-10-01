@@ -48,10 +48,16 @@ contextBridge.exposeInMainWorld('api', {
     // v3.1.0: Instrumentation events - pass only payload
     instrumentation: {
         onProgress: (callback) => {
-            ipcRenderer.on('instrumentation:progress', (_e, payload) => callback(payload));
+            ipcRenderer.on('instrumentation:progress', (_e, payload) => {
+                console.log('[PRELOAD] instrumentation:progress received:', payload);
+                callback(payload);
+            });
         },
         onStart: (callback) => {
-            ipcRenderer.on('analysis:instrumentation:start', (_e, payload) => callback(payload));
+            ipcRenderer.on('analysis:instrumentation:start', (_e, payload) => {
+                console.log('[PRELOAD] analysis:instrumentation:start received:', payload);
+                callback(payload);
+            });
         }
     }
 });

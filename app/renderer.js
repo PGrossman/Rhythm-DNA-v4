@@ -1170,18 +1170,32 @@ function setupAnalysisView() {
     
     // v3.2.0: Listen for instrumentation start events (flip from waiting → processing)
     window.instrumentation?.onStart?.(({ file }) => {
+        console.log('[RENDERER] Received instrumentation:start event for file:', file);
+        console.log('[RENDERER] Current queue length:', currentQueue.length);
         const row = currentQueue.find(t => t.path === file);
-        if (!row) return;
+        console.log('[RENDERER] Found row:', row ? row.fileName : 'NOT FOUND');
+        if (!row) {
+            console.warn('[RENDERER] No matching row found for file:', file);
+            console.log('[RENDERER] Available paths:', currentQueue.map(t => t.path));
+            return;
+        }
+        console.log('[RENDERER] Updating row instrumentation state to processing');
         row.instrumentationState = 'processing';
         row.instrumentationDisplay = 'PROCESSING';
         row.instrumentationPct = 0;
         updateQueueDisplay();
+        console.log('[RENDERER] UI updated');
     });
     
     // v3.2.0: KISS checkpoint percentages with badge styling
     window.instrumentation?.onProgress?.(({ file, pct = 0, label }) => {
+        console.log('[RENDERER] Received instrumentation:progress event - file:', file, 'pct:', pct, 'label:', label);
         const row = currentQueue.find(t => t.path === file);
-        if (!row) return;
+        if (!row) {
+            console.warn('[RENDERER] No matching row for progress event:', file);
+            return;
+        }
+        console.log('[RENDERER] Updating instrumentation to', pct + '%');
         row.instrumentationState = 'processing';
         row.instrumentationPct = pct;
         if (pct >= 100) {

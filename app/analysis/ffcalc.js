@@ -46,10 +46,17 @@ function emitInstrumentationProgress(win, filePath, pct, label = null) {
 async function runInstrumentationAnalysis(filePath, win, audioHints = {}) {
   try {
     console.log('[INSTRUMENTATION] Starting analysis for:', path.basename(filePath));
+    console.log('[INSTRUMENTATION] Full file path:', filePath);
     
     // v3.0.0: Send explicit start event and 0% checkpoint
-    if (win) win.webContents.send('analysis:instrumentation:start', { file: filePath });
+    if (win) {
+      console.log('[INSTRUMENTATION] Sending analysis:instrumentation:start event');
+      win.webContents.send('analysis:instrumentation:start', { file: filePath });
+      console.log('[INSTRUMENTATION] Start event sent');
+    }
+    console.log('[INSTRUMENTATION] Sending 0% progress event');
     sendInstrProgress(filePath, 0, "processing");
+    console.log('[INSTRUMENTATION] 0% progress event sent');
     
     // Run ensemble analysis with progress callbacks
     const result = await analyzeWithEnsemble(filePath, { 
