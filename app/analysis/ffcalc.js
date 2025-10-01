@@ -50,10 +50,21 @@ async function runInstrumentationAnalysis(filePath, win, audioHints = {}) {
     
     // v3.0.0: Send explicit start event and 0% checkpoint
     if (win) {
+      console.log('[INSTRUMENTATION] win exists:', !!win);
+      console.log('[INSTRUMENTATION] win.isDestroyed:', win?.isDestroyed?.());
+      console.log('[INSTRUMENTATION] webContents exists:', !!win?.webContents);
       console.log('[INSTRUMENTATION] Sending analysis:instrumentation:start event');
       win.webContents.send('analysis:instrumentation:start', { file: filePath });
       console.log('[INSTRUMENTATION] Start event sent');
+    } else {
+      console.error('[INSTRUMENTATION] No window reference provided!');
     }
+    
+    // Debug sendInstrProgress window
+    const progressWin = BrowserWindow.getAllWindows()[0];
+    console.log('[INSTRUMENTATION] sendInstrProgress window exists:', !!progressWin);
+    console.log('[INSTRUMENTATION] sendInstrProgress window === win:', progressWin === win);
+    
     console.log('[INSTRUMENTATION] Sending 0% progress event');
     sendInstrProgress(filePath, 0, "processing");
     console.log('[INSTRUMENTATION] 0% progress event sent');
