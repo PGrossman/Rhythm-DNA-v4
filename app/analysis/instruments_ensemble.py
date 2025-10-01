@@ -1933,8 +1933,26 @@ def _family_rollup(decision, decision_trace):
         fam_mean, fam_pos = family_agg_stats(members)
         spike = family_spike(members, rollup_cfg["single_high"])
 
-        # Context rule (helps Woodwinds precision): require Strings or Brass already present
+        # Context rule: Require orchestral context for Strings and Woodwinds
         context_ok = True
+        
+        # v1.3.0: Strings context - require piano OR brass at orchestral levels
+        # Prevents synth-pad false positives in pop/rock (e.g., "Down Under")
+        if group_label == "Strings (section)":
+            try:
+                piano_mean = _combined_mean(decision_trace, "piano")
+            except Exception as e:
+                _log.debug("booster _combined_mean failed for piano: %s", e)
+                piano_mean = 0.0
+            try:
+                brass_mean = _combined_mean(decision_trace, "brass")
+            except Exception as e:
+                _log.debug("booster _combined_mean failed for brass: %s", e)
+                brass_mean = 0.0
+            # Require piano >= 0.005 OR brass >= 0.006 to consider this orchestral context
+            context_ok = (piano_mean >= 0.005) or (brass_mean >= 0.006) or have_brass
+        
+        # Woodwinds context (helps precision): require Strings or Brass already present
         if rollup_cfg["require_context"] and group_label == "Woodwinds":
             try:
                 strings_mean = _combined_mean(decision_trace, "strings")
