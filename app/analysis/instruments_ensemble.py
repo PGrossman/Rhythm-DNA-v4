@@ -1980,6 +1980,9 @@ def _family_rollup(decision, decision_trace):
 def _collapse_orchestral_groups(final_list, per_model=None):
     """Collapse orchestral families into groups for final output."""
     present = set(final_list)
+    # DEBUG: Log what's in the input list
+    print(f"[COLLAPSE_DEBUG] Input list: {final_list}")
+    print(f"[COLLAPSE_DEBUG] Present set: {present}")
     # if any member OR an existing section tag is present, add the group label
     add = set()
     # map of instrument synonyms -> canonical members (optional)
@@ -1988,6 +1991,7 @@ def _collapse_orchestral_groups(final_list, per_model=None):
         label = cfg["label"]
         # already present? keep it
         if label in present:
+            print(f"[COLLAPSE_DEBUG] {label} already in present, adding to keep set")
             add.add(label)
             continue
         members = set(cfg["members"])
