@@ -2033,10 +2033,10 @@ def _collapse_orchestral_groups(final_list, per_model=None):
 def _detect_electronic_elements(analysis_out, creative_data=None):
     """
     Infer synthesizer/electronic presence from genre + instrument patterns.
-    Returns dict with 'present' (bool), 'confidence' (str), and 'reasons' (list).
+    Returns dict with 'present' (bool), 'confidence' (str), 'reasons' (list), and 'debug' (dict).
     """
     import sys
-    result = {"present": False, "confidence": None, "reasons": []}
+    result = {"present": False, "confidence": None, "reasons": [], "debug": {}}
     
     instruments = set(analysis_out.get("instruments", []))
     trace = analysis_out.get("decision_trace", {})
@@ -2120,6 +2120,24 @@ def _detect_electronic_elements(analysis_out, creative_data=None):
     # Upgrade confidence if multiple rules match
     if len(result["reasons"]) >= 2:
         result["confidence"] = "high"
+    
+    # Add debug info to JSON output (since Python stdout isn't captured)
+    result["debug"] = {
+        "instruments_seen": list(instruments),
+        "has_keyboard": has_keyboard,
+        "has_strings": has_strings,
+        "has_brass": has_brass,
+        "has_woodwinds": has_woodwinds,
+        "organ_mean": round(organ_mean, 4),
+        "strings_mean": round(strings_mean, 4),
+        "strings_pos": round(strings_pos, 4),
+        "genres": genres,
+        "has_electronic_genre": has_electronic_genre,
+        "rule_1_eligible": has_electronic_genre and has_keyboard and (has_strings or has_brass or has_woodwinds),
+        "rule_2_eligible": organ_mean > 0.008 and has_strings and strings_pos < 0.15,
+        "rule_3_eligible": organ_mean > 0.012 and (has_strings or has_brass),
+        "rules_fired": len(result["reasons"])
+    }
     
     print(f"[ELECTRONIC] Final result: present={result['present']}, confidence={result['confidence']}, reasons={result['reasons']}")
     sys.stdout.flush()
@@ -5096,14 +5114,15 @@ def analyze(audio_path: str, use_demucs: bool = True, diag: bool = False) -> Dic
         electronic_result = _detect_electronic_elements(out, creative_data=None)
         print(f"[ELECTRONIC-ENTRY] Detection returned: {electronic_result}")
         sys.stdout.flush()
-        if electronic_result["present"]:
-            out["electronic_elements"] = {
-                "detected": True,
-                "confidence": electronic_result["confidence"],
-                "reasons": electronic_result["reasons"]
-            }
-            print(f"[ELECTRONIC-ENTRY] Added electronic_elements to output")
-            sys.stdout.flush()
+        # Always add electronic_elements (with debug info) so we can diagnose failures
+        out["electronic_elements"] = {
+            "detected": electronic_result["present"],
+            "confidence": electronic_result["confidence"],
+            "reasons": electronic_result["reasons"],
+            "debug": electronic_result.get("debug", {})  # Include debug info in JSON
+        }
+        print(f"[ELECTRONIC-ENTRY] Added electronic_elements to output (detected={electronic_result['present']})")
+        sys.stdout.flush()
     except Exception as _e:
         print(f"[ELECTRONIC-ENTRY] EXCEPTION: {type(_e).__name__}: {_e}")
         sys.stdout.flush()
