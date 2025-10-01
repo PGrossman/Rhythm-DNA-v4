@@ -773,8 +773,12 @@ def _apply_mix_only_strings_v1(per_model, instruments, decision_trace):
         return float(p_pos.get(k, 0.0)) + float(y_pos.get(k, 0.0))
 
     TH = {
-        "strings": {"mean": 0.0085, "pos": 0.0},  # v1.1.0: raise strings mean gate to reduce synth-pad promotion in pop/rock
-        "gate":    {"piano": 0.0050, "brass": 0.0060},
+        "strings": {
+            "mean_orchestral": 0.0065,  # v1.2.0: Lower threshold when orchestral context (piano/brass) exists
+            "mean_default": 0.0085,     # v1.1.0: Strict threshold for pop/rock to avoid synth-pad false positives
+            "pos": 0.0
+        },
+        "gate": {"piano": 0.0050, "brass": 0.0060},
     }
 
     strings_mean = cm("strings")
@@ -789,7 +793,11 @@ def _apply_mix_only_strings_v1(per_model, instruments, decision_trace):
     individual_string_pos = max(cp(key) for key in string_keys)
     individual_string_ok = individual_string_pos >= 0.004
     
-    pass_strings = (strings_mean >= TH["strings"]["mean"]) and gate_ok and individual_string_ok
+    # v1.2.0: Context-aware threshold - use lower threshold when orchestral context exists
+    # This catches real orchestral strings (e.g., Beatles "A Day in the Life" with 21 string players)
+    # while maintaining strict threshold for pop/rock to avoid synth-pad false positives
+    effective_threshold = TH["strings"]["mean_orchestral"] if gate_ok else TH["strings"]["mean_default"]
+    pass_strings = (strings_mean >= effective_threshold) and gate_ok and individual_string_ok
 
     added = []
     if pass_strings and ("Strings (section)" not in instruments):
@@ -802,6 +810,8 @@ def _apply_mix_only_strings_v1(per_model, instruments, decision_trace):
         "decisions": {
             "strings": {"combined_mean": strings_mean, "combined_pos": strings_pos},
             "gates":   {"piano_mean": piano_mean, "brass_mean": brass_mean, "gate_ok": gate_ok},
+            "effective_threshold": effective_threshold,  # v1.2.0: Show which threshold was actually used
+            "threshold_type": "orchestral" if gate_ok else "default",
         },
         "added": added,
     }
