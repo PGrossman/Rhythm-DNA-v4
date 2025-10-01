@@ -1562,9 +1562,9 @@ def _apply_mix_only_bass_trumpet_boost(instruments, trace):
             # Only attempt bass if it's not already present.
             if not _has(instruments, "Bass Guitar"):
                 try:
-                    cm = _combined_mean(trace, "bass_guitar")
+                    cm = _combined_mean_legacy(trace, "bass_guitar")
                 except Exception as e:
-                    _log.debug("booster _combined_mean failed for bass_guitar: %s", e)
+                    _log.debug("booster _combined_mean_legacy failed for bass_guitar: %s", e)
                     cm = 0.0
                 pm = _panns_mean(trace, "bass_guitar")
                 need_mean = cm >= MIX_ONLY_TUNE["bass"]["COMBINED_MEAN_MIN"] or pm >= MIX_ONLY_TUNE["bass"]["PANN_MEAN_MIN"]
@@ -1575,9 +1575,9 @@ def _apply_mix_only_bass_trumpet_boost(instruments, trace):
         # --- Trumpet nudge (mix-only) ---
         if _has(instruments, MIX_ONLY_TUNE["trumpet"]["REQUIRE_SECTION"]) and not _has(instruments, "Trumpet"):
             try:
-                cm_trp = _combined_mean(trace, "trumpet")
+                cm_trp = _combined_mean_legacy(trace, "trumpet")
             except Exception as e:
-                _log.debug("booster _combined_mean failed for trumpet: %s", e)
+                _log.debug("booster _combined_mean_legacy failed for trumpet: %s", e)
                 cm_trp = 0.0
             pos_trp = _any_pos(trace, "trumpet")
             if cm_trp >= MIX_ONLY_TUNE["trumpet"]["COMBINED_MEAN_MIN"] and pos_trp >= MIX_ONLY_TUNE["trumpet"]["POS_ANY_MIN"]:
@@ -1592,11 +1592,11 @@ def _apply_mix_only_core_v2(instruments, trace):
     try:
         core_instruments = []
         
-        # Check drums
+        # Check drums (use _combined_mean_legacy for proper trace navigation)
         try:
-            drum_mean = _combined_mean(trace, "drum_kit")
+            drum_mean = _combined_mean_legacy(trace, "drum_kit")
         except Exception as e:
-            _log.debug("booster _combined_mean failed for drum_kit: %s", e)
+            _log.debug("booster _combined_mean_legacy failed for drum_kit: %s", e)
             drum_mean = 0.0
         drum_pos = _any_pos(trace, "drum_kit")
         
@@ -1673,33 +1673,33 @@ def _apply_mix_only_core_v2(instruments, trace):
         if pass_drum_kit:
             core_instruments.append("Drum Kit (acoustic)")
         
-        # Check electric guitar
+        # Check electric guitar (use _combined_mean_legacy for proper trace navigation)
         try:
-            eg_mean = _combined_mean(trace, "electric_guitar")
+            eg_mean = _combined_mean_legacy(trace, "electric_guitar")
         except Exception as e:
-            _log.debug("booster _combined_mean failed for electric_guitar: %s", e)
+            _log.debug("booster _combined_mean_legacy failed for electric_guitar: %s", e)
             eg_mean = 0.0
         eg_pos = _any_pos(trace, "electric_guitar")
         if (eg_mean >= MIX_ONLY_CORE_V2["electric_guitar"]["mean"] and 
             eg_pos >= MIX_ONLY_CORE_V2["electric_guitar"]["pos"]):
             core_instruments.append("Electric Guitar")
         
-        # Check acoustic guitar
+        # Check acoustic guitar (use _combined_mean_legacy for proper trace navigation)
         try:
-            ag_mean = _combined_mean(trace, "acoustic_guitar")
+            ag_mean = _combined_mean_legacy(trace, "acoustic_guitar")
         except Exception as e:
-            _log.debug("booster _combined_mean failed for acoustic_guitar: %s", e)
+            _log.debug("booster _combined_mean_legacy failed for acoustic_guitar: %s", e)
             ag_mean = 0.0
         ag_pos = _any_pos(trace, "acoustic_guitar")
         if (ag_mean >= MIX_ONLY_CORE_V2["acoustic_guitar"]["mean"] and 
             ag_pos >= MIX_ONLY_CORE_V2["acoustic_guitar"]["pos"]):
             core_instruments.append("Acoustic Guitar")
         
-        # Check bass guitar
+        # Check bass guitar (use _combined_mean_legacy for proper trace navigation)
         try:
-            bg_mean = _combined_mean(trace, "bass_guitar")
+            bg_mean = _combined_mean_legacy(trace, "bass_guitar")
         except Exception as e:
-            _log.debug("booster _combined_mean failed for bass_guitar: %s", e)
+            _log.debug("booster _combined_mean_legacy failed for bass_guitar: %s", e)
             bg_mean = 0.0
         bg_pos = _any_pos(trace, "bass_guitar")
         if (bg_mean >= MIX_ONLY_CORE_V2["bass_guitar"]["mean"] and 
@@ -1782,7 +1782,7 @@ def _apply_mix_only_woodwinds_v1(instruments, trace):
         sum_mean, sum_pos, any_pos, per_model_dump = _sum_woodwind_evidence(trace)
         
         # Check piano domination veto (but not if piano_combined_pos == 0 or very small)
-        piano_combined_pos = _combined_mean(trace, "piano")
+        piano_combined_pos = _combined_mean_legacy(trace, "piano")
         piano_dominant = piano_combined_pos > 0.0 and piano_combined_pos >= 0.45
         
         # Check context requirement
@@ -1793,9 +1793,9 @@ def _apply_mix_only_woodwinds_v1(instruments, trace):
         # Check individual woodwinds with relaxed thresholds
         for key in WOODWIND_KEYS:
             try:
-                cm = _combined_mean(trace, key)
+                cm = _combined_mean_legacy(trace, key)
             except Exception as e:
-                _log.debug("booster _combined_mean failed for %s: %s", key, e)
+                _log.debug("booster _combined_mean_legacy failed for %s: %s", key, e)
                 cm = 0.0
             cp = _any_pos(trace, key)
             
@@ -1827,9 +1827,9 @@ def _apply_mix_only_woodwinds_v1(instruments, trace):
         # Case 2: Strong individual woodwind
         for key in WOODWIND_KEYS:
             try:
-                cm = _combined_mean(trace, key)
+                cm = _combined_mean_legacy(trace, key)
             except Exception as e:
-                _log.debug("booster _combined_mean failed for %s: %s", key, e)
+                _log.debug("booster _combined_mean_legacy failed for %s: %s", key, e)
                 cm = 0.0
             cp = _any_pos(trace, key)
             if (cm >= MIX_ONLY_WOODWINDS_V1["strong_individual"]["mean"] and 
@@ -1925,8 +1925,24 @@ def _family_rollup(decision, decision_trace):
         fam_mean, fam_pos = family_agg_stats(members)
         spike = family_spike(members, rollup_cfg["single_high"])
 
-        # Context rule (helps Woodwinds precision): require Strings or Brass already present
+        # Context rules: require orchestral context for Strings and Woodwinds
         context_ok = True
+        
+        # Strings context: require piano or brass signal strength
+        if group_label == "Strings (section)":
+            try:
+                piano_mean = _combined_mean(decision_trace, "piano")
+            except Exception as e:
+                _log.debug("booster _combined_mean failed for piano: %s", e)
+                piano_mean = 0.0
+            try:
+                brass_mean = _combined_mean(decision_trace, "brass")
+            except Exception as e:
+                _log.debug("booster _combined_mean failed for brass: %s", e)
+                brass_mean = 0.0
+            context_ok = (piano_mean >= 0.005) or (brass_mean >= 0.006)
+        
+        # Woodwinds context: require Strings or Brass signal strength
         if rollup_cfg["require_context"] and group_label == "Woodwinds":
             try:
                 strings_mean = _combined_mean(decision_trace, "strings")
@@ -2252,7 +2268,7 @@ MIX_ONLY_CORE_V2 = {
         "pos": 0.020       # v1.1.0: brushed/soft kits often show pos ~0.01–0.02; keep mean at 0.006
     },
     "electric_guitar": {
-        "mean": 0.006,     # updated from 0.005; cp≈0.023 observed
+        "mean": 0.006,     # combined PANNs+YAMNet mean threshold
         "pos": 0.023       # was 0.03; cp≈0.023 observed
     },
     "bass_guitar": {
