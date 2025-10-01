@@ -5102,6 +5102,9 @@ def analyze(audio_path: str, use_demucs: bool = True, diag: bool = False) -> Dic
         # Never break pipeline if grouping hiccups
         out.setdefault("errors", []).append(f"orchestral_grouping_failed:{type(_e).__name__}:{_e}")
 
+    # DIAGNOSTIC: Prove this code block is reached
+    out["__electronic_detection_code_reached__"] = True
+    
     # Detect electronic/synthesizer elements
     import sys
     print(f"[ELECTRONIC-ENTRY] About to call detection, instruments: {out.get('instruments', [])}")
