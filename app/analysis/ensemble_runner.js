@@ -119,7 +119,8 @@ function analyzeWithEnsemble(audioPath, opts = {}) {
       const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), "ensemble-"));
       const outPath = path.join(tmpDir, "result.json");
 
-      const args = [script, "--audio", audioPath, "--json-out", outPath, "--demucs", demucs ? "1" : "0"];
+      // v1.3.0: Add -B flag to prevent Python bytecode caching (ensures latest code runs)
+      const args = ["-B", script, "--audio", audioPath, "--json-out", outPath, "--demucs", demucs ? "1" : "0"];
       
       // Add diagnostics flag if enabled
       if (process.env.RNA_DIAG_INSTRUMENTS) {
