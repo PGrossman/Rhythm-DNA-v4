@@ -293,6 +293,54 @@ let IS_DIRTY = false;         // Filters changed but not applied
 let CURRENT_RESULTS = [];     // Last filtered results
 let CURRENT_PAGE = 1;         // Current page (1-based)
 
+// v3.2.0: Register IPC listeners at module load (before any views render)
+// This ensures listeners are ready when main process fires events during analysis startup
+if (window.instrumentation?.onStart) {
+    window.instrumentation.onStart(({ file }) => {
+        console.log('[RENDERER] Received instrumentation:start event for file:', file);
+        console.log('[RENDERER] Current queue length:', currentQueue.length);
+        const row = currentQueue.find(t => t.path === file);
+        console.log('[RENDERER] Found row:', row ? row.fileName : 'NOT FOUND');
+        if (!row) {
+            console.warn('[RENDERER] No matching row found for file:', file);
+            console.log('[RENDERER] Available paths:', currentQueue.map(t => t.path));
+            return;
+        }
+        console.log('[RENDERER] Updating row instrumentation state to processing');
+        row.instrumentationState = 'processing';
+        row.instrumentationDisplay = 'PROCESSING';
+        row.instrumentationPct = 0;
+        updateQueueDisplay();
+        console.log('[RENDERER] UI updated');
+    });
+}
+
+if (window.instrumentation?.onProgress) {
+    window.instrumentation.onProgress(({ file, pct = 0, label }) => {
+        console.log('[RENDERER] Received instrumentation:progress event - file:', file, 'pct:', pct, 'label:', label);
+        const row = currentQueue.find(t => t.path === file);
+        if (!row) {
+            console.warn('[RENDERER] No matching row for progress event:', file);
+            return;
+        }
+        console.log('[RENDERER] Updating instrumentation to', pct + '%');
+        row.instrumentationState = 'processing';
+        row.instrumentationPct = pct;
+        if (pct >= 100) {
+            row.instrumentationDisplay = 'COMPLETE';
+        } else if (pct >= 75) {
+            row.instrumentationDisplay = '75%';
+        } else if (pct >= 50) {
+            row.instrumentationDisplay = '50%';
+        } else if (pct >= 25) {
+            row.instrumentationDisplay = '25%';
+        } else {
+            row.instrumentationDisplay = label || 'PROCESSING';
+        }
+        updateQueueDisplay();
+    });
+}
+
 async function setupSearchView() {
     console.log('[SEARCH] Initializing search view');
     
@@ -1167,50 +1215,6 @@ function setupAnalysisView() {
     }
     
     updateQueueDisplay();
-    
-    // v3.2.0: Listen for instrumentation start events (flip from waiting → processing)
-    window.instrumentation?.onStart?.(({ file }) => {
-        console.log('[RENDERER] Received instrumentation:start event for file:', file);
-        console.log('[RENDERER] Current queue length:', currentQueue.length);
-        const row = currentQueue.find(t => t.path === file);
-        console.log('[RENDERER] Found row:', row ? row.fileName : 'NOT FOUND');
-        if (!row) {
-            console.warn('[RENDERER] No matching row found for file:', file);
-            console.log('[RENDERER] Available paths:', currentQueue.map(t => t.path));
-            return;
-        }
-        console.log('[RENDERER] Updating row instrumentation state to processing');
-        row.instrumentationState = 'processing';
-        row.instrumentationDisplay = 'PROCESSING';
-        row.instrumentationPct = 0;
-        updateQueueDisplay();
-        console.log('[RENDERER] UI updated');
-    });
-    
-    // v3.2.0: KISS checkpoint percentages with badge styling
-    window.instrumentation?.onProgress?.(({ file, pct = 0, label }) => {
-        console.log('[RENDERER] Received instrumentation:progress event - file:', file, 'pct:', pct, 'label:', label);
-        const row = currentQueue.find(t => t.path === file);
-        if (!row) {
-            console.warn('[RENDERER] No matching row for progress event:', file);
-            return;
-        }
-        console.log('[RENDERER] Updating instrumentation to', pct + '%');
-        row.instrumentationState = 'processing';
-        row.instrumentationPct = pct;
-        if (pct >= 100) {
-            row.instrumentationDisplay = 'COMPLETE';
-        } else if (pct >= 75) {
-            row.instrumentationDisplay = '75%';
-        } else if (pct >= 50) {
-            row.instrumentationDisplay = '50%';
-        } else if (pct >= 25) {
-            row.instrumentationDisplay = '25%';
-        } else {
-            row.instrumentationDisplay = label || 'PROCESSING';
-        }
-        updateQueueDisplay();
-    });
 }
 
 // v1.0.0: Start instrumentation for a specific track
