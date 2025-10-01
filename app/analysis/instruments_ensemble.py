@@ -788,10 +788,12 @@ def _apply_mix_only_strings_v1(per_model, instruments, decision_trace):
 
     gate_ok = (piano_mean >= TH["gate"]["piano"]) or (brass_mean >= TH["gate"]["brass"])
     
-    # Micro check: require any individual string instrument to have pos >= 0.004
+    # v1.2.0: Optional micro check - if individual string instruments are detected, at least one should have pos >= 0.004
+    # But don't block if only generic "strings" label exists (common in orchestral mixes)
     string_keys = ["violin", "cello", "viola", "double_bass"]
     individual_string_pos = max(cp(key) for key in string_keys)
-    individual_string_ok = individual_string_pos >= 0.004
+    has_individual_strings = individual_string_pos > 0  # Are individual instruments detected at all?
+    individual_string_ok = (not has_individual_strings) or (individual_string_pos >= 0.004)
     
     # v1.2.0: Context-aware threshold - use lower threshold when orchestral context exists
     # This catches real orchestral strings (e.g., Beatles "A Day in the Life" with 21 string players)
