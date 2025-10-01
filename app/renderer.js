@@ -294,19 +294,19 @@ let CURRENT_RESULTS = [];     // Last filtered results
 let CURRENT_PAGE = 1;         // Current page (1-based)
 
 // v3.3.0: Register IPC listeners on DOMContentLoaded (after preload API is fully ready)
-// This ensures window.instrumentation exists before trying to register listeners
+// This ensures window.api.instrumentation exists before trying to register listeners
 window.addEventListener('DOMContentLoaded', () => {
     console.log('[RENDERER] DOMContentLoaded - sending ready signal');
     window.api?.sendRendererReady?.();
     
     // Now register instrumentation listeners (preload API is guaranteed to exist)
     console.log('[RENDERER] Registering instrumentation listeners');
-    console.log('[RENDERER] window.instrumentation exists:', !!window.instrumentation);
-    console.log('[RENDERER] window.instrumentation.onStart exists:', !!window.instrumentation?.onStart);
+    console.log('[RENDERER] window.api.instrumentation exists:', !!window.api?.instrumentation);
+    console.log('[RENDERER] window.api.instrumentation.onStart exists:', !!window.api?.instrumentation?.onStart);
 
-    if (window.instrumentation?.onStart) {
-        console.log('[RENDERER] Calling window.instrumentation.onStart()');
-        window.instrumentation.onStart(({ file }) => {
+    if (window.api?.instrumentation?.onStart) {
+        console.log('[RENDERER] Calling window.api.instrumentation.onStart()');
+        window.api.instrumentation.onStart(({ file }) => {
             console.log('[RENDERER] Received instrumentation:start event for file:', file);
             console.log('[RENDERER] Current queue length:', currentQueue.length);
             const row = currentQueue.find(t => t.path === file);
@@ -324,12 +324,12 @@ window.addEventListener('DOMContentLoaded', () => {
             console.log('[RENDERER] UI updated');
         });
     } else {
-        console.error('[RENDERER] window.instrumentation.onStart not available!');
+        console.error('[RENDERER] window.api.instrumentation.onStart not available!');
     }
 
-    if (window.instrumentation?.onProgress) {
-        console.log('[RENDERER] Calling window.instrumentation.onProgress()');
-        window.instrumentation.onProgress(({ file, pct = 0, label }) => {
+    if (window.api?.instrumentation?.onProgress) {
+        console.log('[RENDERER] Calling window.api.instrumentation.onProgress()');
+        window.api.instrumentation.onProgress(({ file, pct = 0, label }) => {
             console.log('[RENDERER] Received instrumentation:progress event - file:', file, 'pct:', pct, 'label:', label);
             const row = currentQueue.find(t => t.path === file);
             if (!row) {
@@ -353,7 +353,7 @@ window.addEventListener('DOMContentLoaded', () => {
             updateQueueDisplay();
         });
     } else {
-        console.error('[RENDERER] window.instrumentation.onProgress not available!');
+        console.error('[RENDERER] window.api.instrumentation.onProgress not available!');
     }
 });
 
