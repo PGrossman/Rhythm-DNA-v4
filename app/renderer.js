@@ -341,6 +341,12 @@ if (window.instrumentation?.onProgress) {
     });
 }
 
+// v3.3.0: Signal renderer is ready to receive IPC events
+window.addEventListener('DOMContentLoaded', () => {
+    console.log('[RENDERER] DOMContentLoaded - sending ready signal');
+    window.api?.sendRendererReady?.();
+});
+
 async function setupSearchView() {
     console.log('[SEARCH] Initializing search view');
     

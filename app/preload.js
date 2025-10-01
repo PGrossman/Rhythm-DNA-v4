@@ -7,6 +7,9 @@ contextBridge.exposeInMainWorld('api', {
     scanDropped: (paths) => ipcRenderer.invoke('scanDropped', { paths }),
     analyzeFile: (filePath) => ipcRenderer.invoke('analyzeFile', filePath),
     
+    // v3.3.0: Renderer-ready handshake
+    sendRendererReady: () => ipcRenderer.send('renderer:ready'),
+    
     // Settings (these are fine to keep)
     getSettings: () => ipcRenderer.invoke('getSettings'),
     updateSettings: (settings) => ipcRenderer.invoke('updateSettings', settings),

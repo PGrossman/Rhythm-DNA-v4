@@ -63,6 +63,10 @@ let settings = {
     }
 };
 
+// v3.3.0: Track renderer ready state
+let rendererReady = false;
+const pendingAnalysis = [];
+
 // DB paths helper
 let dbPaths = null;
 async function resolveDbPaths() {
@@ -156,6 +160,53 @@ const createWindow = () => {
     });
 
     win.loadFile(path.join(app.getAppPath(), 'app', 'renderer.html'));
+    
+    // v3.3.0: Listen for renderer-ready signal
+    ipcMain.once('renderer:ready', async () => {
+        console.log('[MAIN] Renderer ready signal received');
+        rendererReady = true;
+        
+        // Process any queued analysis requests
+        if (pendingAnalysis.length > 0) {
+            console.log(`[MAIN] Processing ${pendingAnalysis.length} queued analysis requests`);
+            
+            // Process each queued request
+            for (const { resolve, filePath } of pendingAnalysis) {
+                try {
+                    console.log('[MAIN] Processing queued analysis:', filePath);
+                    const result = await analyzeMp3(filePath, win, settings.ollamaModel, settings.dbFolder, settings);
+                    console.log('[MAIN] Queued analysis complete:', result.jsonPath);
+                    
+                    // Upsert into Main DB and optionally update criteria
+                    try {
+                        if (!dbPaths) await resolveDbPaths();
+                        const dbResult = await DB.upsertTrack(dbPaths, result.analysis);
+                        console.log('[MAIN] DB updated:', dbResult.key, 'Total tracks:', dbResult.total);
+                        if (settings.autoUpdateDb) {
+                            const criteriaResult = await DB.rebuildCriteria(dbPaths);
+                            console.log('[MAIN] Criteria auto-updated:', criteriaResult.counts);
+                        }
+                    } catch (e) {
+                        console.error('[MAIN] DB upsert failed:', e);
+                    }
+                    
+                    resolve({ success: true, ...result });
+                } catch (error) {
+                    console.error('[MAIN] Queued analysis error:', error);
+                    resolve({ success: false, error: error.message });
+                }
+            }
+            pendingAnalysis.length = 0;
+        }
+    });
+    
+    // v3.3.0: Backup - mark ready after a timeout if signal not received
+    setTimeout(() => {
+        if (!rendererReady) {
+            console.log('[MAIN] Renderer ready timeout - assuming ready');
+            rendererReady = true;
+        }
+    }, 5000);
     
     // Register IPC handler for drag-drop
     ipcMain.handle('scanDropped', async (event, { paths }) => {
@@ -257,6 +308,15 @@ const createWindow = () => {
     // FFmpeg analysis handler
     ipcMain.handle('analyzeFile', async (event, filePath) => {
         try {
+            // v3.3.0: Wait for renderer to be ready before starting analysis
+            if (!rendererReady) {
+                console.log('[MAIN] Renderer not ready, queuing analysis for:', filePath);
+                return new Promise((resolve) => {
+                    pendingAnalysis.push({ filePath, resolve });
+                    // The promise will be resolved when renderer:ready fires
+                });
+            }
+            
             console.log('[MAIN] Analyzing:', filePath);
             // Pass the window to send progress events
             const { analyzeMp3 } = require('./analysis/ffcalc.js');
