@@ -2065,9 +2065,9 @@ def _detect_electronic_elements(analysis_out, creative_data=None):
             return 0.0
     
     has_keyboard = ("Piano" in instruments or "Organ" in instruments)
-    has_strings = "Strings (section)" in instruments
-    has_brass = "Brass (section)" in instruments
-    has_woodwinds = "Woodwinds (section)" in instruments
+    has_strings = ("Strings (section)" in instruments or "Strings" in instruments)
+    has_brass = ("Brass (section)" in instruments or "Brass" in instruments)
+    has_woodwinds = ("Woodwinds (section)" in instruments or "Woodwinds" in instruments)
     
     organ_mean = get_mean("organ")
     strings_mean = get_mean("strings")
