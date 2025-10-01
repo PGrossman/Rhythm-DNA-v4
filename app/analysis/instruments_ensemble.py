@@ -3734,11 +3734,21 @@ def _apply_strings_pad_guard_v1(instruments, trace):
                 key in instruments for key in ["Organ", "Piano", "Synthesizer", "Keyboard"]
             )
             
-            # Demote if conditions met
+            # v1.2.0: Check for strong orchestral context (both piano AND brass at orchestral levels)
+            # If present, bypass pad guard - this is real orchestral strings, not synth pads
+            piano_mean = (panns.get("mean_probs", {}).get("piano", 0.0) + 
+                         yamnet.get("mean_probs", {}).get("piano", 0.0))
+            brass_mean = (panns.get("mean_probs", {}).get("brass", 0.0) + 
+                         yamnet.get("mean_probs", {}).get("brass", 0.0))
+            strong_orchestral_context = (piano_mean >= 0.007) and (brass_mean >= 0.0075)
+            
+            # Demote if conditions met AND no strong orchestral context
             # v1.1.0: widen pad guard to catch synth-pad cases with tiny per-string evidence
+            # v1.2.0: skip removal when strong orchestral context (real strings, not pads)
             if (strings_pos < 0.025 and 
                 max_individual_pos < 0.012 and 
-                keyboard_present):
+                keyboard_present and
+                not strong_orchestral_context):
                 
                 instruments.remove("Strings (section)")
                 
@@ -3749,10 +3759,30 @@ def _apply_strings_pad_guard_v1(instruments, trace):
                         "strings_pos": strings_pos,
                         "max_individual_pos": max_individual_pos,
                         "keyboard_present": keyboard_present,
+                        "piano_mean": piano_mean,
+                        "brass_mean": brass_mean,
+                        "strong_orchestral_context": strong_orchestral_context,
                         "individual_pos": {key: panns.get("pos_ratio", {}).get(key, 0.0) for key in string_keys}
                     },
                     "removed": ["Strings (section)"]
                 }
+            else:
+                # v1.2.0: Log when guard is bypassed due to orchestral context
+                if strong_orchestral_context:
+                    trace.setdefault("boosts", {})["strings_pad_guard_v1"] = {
+                        "booster": "strings_pad_guard_v1",
+                        "action": "bypassed",
+                        "reason": "strong_orchestral_context",
+                        "conditions": {
+                            "strings_pos": strings_pos,
+                            "max_individual_pos": max_individual_pos,
+                            "keyboard_present": keyboard_present,
+                            "piano_mean": piano_mean,
+                            "brass_mean": brass_mean,
+                            "strong_orchestral_context": strong_orchestral_context
+                        },
+                        "removed": []
+                    }
                 
     except Exception as e:
         trace.setdefault("errors", []).append(f"strings_pad_guard_v1: {type(e).__name__}: {e}")
