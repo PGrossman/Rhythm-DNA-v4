@@ -63,9 +63,10 @@ let settings = {
     }
 };
 
-// v3.3.0: Track renderer ready state
+// v3.3.0: Track renderer ready state - MUST be at module scope
 let rendererReady = false;
 const pendingAnalysis = [];
+let mainWindow = null;
 
 // DB paths helper
 let dbPaths = null;
@@ -147,6 +148,46 @@ const getInstalledModels = async () => {
     }
 };
 
+// v3.3.0: Register renderer-ready listener at MODULE LOAD (before createWindow)
+// This prevents race condition where renderer sends signal before listener is registered
+ipcMain.once('renderer:ready', async () => {
+    console.log('[MAIN] Renderer ready signal received');
+    rendererReady = true;
+    
+    // Process any queued analysis requests
+    if (pendingAnalysis.length > 0) {
+        console.log(`[MAIN] Processing ${pendingAnalysis.length} queued analysis requests`);
+        
+        // Process each queued request sequentially with full error handling
+        for (const { resolve, filePath } of pendingAnalysis) {
+            try {
+                console.log('[MAIN] Processing queued analysis:', filePath);
+                const result = await analyzeMp3(filePath, mainWindow, settings.ollamaModel, settings.dbFolder, settings);
+                console.log('[MAIN] Queued analysis complete:', result.jsonPath);
+                
+                // Upsert into Main DB and optionally update criteria
+                try {
+                    if (!dbPaths) await resolveDbPaths();
+                    const dbResult = await DB.upsertTrack(dbPaths, result.analysis);
+                    console.log('[MAIN] DB updated:', dbResult.key, 'Total tracks:', dbResult.total);
+                    if (settings.autoUpdateDb) {
+                        const criteriaResult = await DB.rebuildCriteria(dbPaths);
+                        console.log('[MAIN] Criteria auto-updated:', criteriaResult.counts);
+                    }
+                } catch (e) {
+                    console.error('[MAIN] DB upsert failed:', e);
+                }
+                
+                resolve({ success: true, ...result });
+            } catch (error) {
+                console.error('[MAIN] Queued analysis error:', error);
+                resolve({ success: false, error: error.message });
+            }
+        }
+        pendingAnalysis.length = 0;
+    }
+});
+
 const createWindow = () => {
     const win = new BrowserWindow({
         width: 1200,
@@ -161,46 +202,10 @@ const createWindow = () => {
 
     win.loadFile(path.join(app.getAppPath(), 'app', 'renderer.html'));
     
-    // v3.3.0: Listen for renderer-ready signal
-    ipcMain.once('renderer:ready', async () => {
-        console.log('[MAIN] Renderer ready signal received');
-        rendererReady = true;
-        
-        // Process any queued analysis requests
-        if (pendingAnalysis.length > 0) {
-            console.log(`[MAIN] Processing ${pendingAnalysis.length} queued analysis requests`);
-            
-            // Process each queued request
-            for (const { resolve, filePath } of pendingAnalysis) {
-                try {
-                    console.log('[MAIN] Processing queued analysis:', filePath);
-                    const result = await analyzeMp3(filePath, win, settings.ollamaModel, settings.dbFolder, settings);
-                    console.log('[MAIN] Queued analysis complete:', result.jsonPath);
-                    
-                    // Upsert into Main DB and optionally update criteria
-                    try {
-                        if (!dbPaths) await resolveDbPaths();
-                        const dbResult = await DB.upsertTrack(dbPaths, result.analysis);
-                        console.log('[MAIN] DB updated:', dbResult.key, 'Total tracks:', dbResult.total);
-                        if (settings.autoUpdateDb) {
-                            const criteriaResult = await DB.rebuildCriteria(dbPaths);
-                            console.log('[MAIN] Criteria auto-updated:', criteriaResult.counts);
-                        }
-                    } catch (e) {
-                        console.error('[MAIN] DB upsert failed:', e);
-                    }
-                    
-                    resolve({ success: true, ...result });
-                } catch (error) {
-                    console.error('[MAIN] Queued analysis error:', error);
-                    resolve({ success: false, error: error.message });
-                }
-            }
-            pendingAnalysis.length = 0;
-        }
-    });
+    // v3.3.0: Store window reference for module-level listener
+    mainWindow = win;
     
-    // v3.3.0: Backup - mark ready after a timeout if signal not received
+    // v3.3.0: Backup timeout - mark ready if signal not received within 5 seconds
     setTimeout(() => {
         if (!rendererReady) {
             console.log('[MAIN] Renderer ready timeout - assuming ready');
@@ -318,9 +323,9 @@ const createWindow = () => {
             }
             
             console.log('[MAIN] Analyzing:', filePath);
-            // Pass the window to send progress events
+            // Pass mainWindow to send progress events
             const { analyzeMp3 } = require('./analysis/ffcalc.js');
-            const result = await analyzeMp3(filePath, win, settings.ollamaModel, settings.dbFolder, settings);
+            const result = await analyzeMp3(filePath, mainWindow, settings.ollamaModel, settings.dbFolder, settings);
             console.log('[MAIN] Analysis complete:', result.jsonPath);
             
             // Upsert into Main DB and optionally update criteria
