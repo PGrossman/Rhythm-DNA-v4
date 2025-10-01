@@ -293,64 +293,68 @@ let IS_DIRTY = false;         // Filters changed but not applied
 let CURRENT_RESULTS = [];     // Last filtered results
 let CURRENT_PAGE = 1;         // Current page (1-based)
 
-// v3.2.0: Register IPC listeners at module load (before any views render)
-// This ensures listeners are ready when main process fires events during analysis startup
-console.log('[RENDERER] Registering instrumentation listeners at module load');
-console.log('[RENDERER] window.instrumentation exists:', !!window.instrumentation);
-console.log('[RENDERER] window.instrumentation.onStart exists:', !!window.instrumentation?.onStart);
-
-if (window.instrumentation?.onStart) {
-    console.log('[RENDERER] Calling window.instrumentation.onStart()');
-    window.instrumentation.onStart(({ file }) => {
-        console.log('[RENDERER] Received instrumentation:start event for file:', file);
-        console.log('[RENDERER] Current queue length:', currentQueue.length);
-        const row = currentQueue.find(t => t.path === file);
-        console.log('[RENDERER] Found row:', row ? row.fileName : 'NOT FOUND');
-        if (!row) {
-            console.warn('[RENDERER] No matching row found for file:', file);
-            console.log('[RENDERER] Available paths:', currentQueue.map(t => t.path));
-            return;
-        }
-        console.log('[RENDERER] Updating row instrumentation state to processing');
-        row.instrumentationState = 'processing';
-        row.instrumentationDisplay = 'PROCESSING';
-        row.instrumentationPct = 0;
-        updateQueueDisplay();
-        console.log('[RENDERER] UI updated');
-    });
-}
-
-if (window.instrumentation?.onProgress) {
-    console.log('[RENDERER] Calling window.instrumentation.onProgress()');
-    window.instrumentation.onProgress(({ file, pct = 0, label }) => {
-        console.log('[RENDERER] Received instrumentation:progress event - file:', file, 'pct:', pct, 'label:', label);
-        const row = currentQueue.find(t => t.path === file);
-        if (!row) {
-            console.warn('[RENDERER] No matching row for progress event:', file);
-            return;
-        }
-        console.log('[RENDERER] Updating instrumentation to', pct + '%');
-        row.instrumentationState = 'processing';
-        row.instrumentationPct = pct;
-        if (pct >= 100) {
-            row.instrumentationDisplay = 'COMPLETE';
-        } else if (pct >= 75) {
-            row.instrumentationDisplay = '75%';
-        } else if (pct >= 50) {
-            row.instrumentationDisplay = '50%';
-        } else if (pct >= 25) {
-            row.instrumentationDisplay = '25%';
-        } else {
-            row.instrumentationDisplay = label || 'PROCESSING';
-        }
-        updateQueueDisplay();
-    });
-}
-
-// v3.3.0: Signal renderer is ready to receive IPC events
+// v3.3.0: Register IPC listeners on DOMContentLoaded (after preload API is fully ready)
+// This ensures window.instrumentation exists before trying to register listeners
 window.addEventListener('DOMContentLoaded', () => {
     console.log('[RENDERER] DOMContentLoaded - sending ready signal');
     window.api?.sendRendererReady?.();
+    
+    // Now register instrumentation listeners (preload API is guaranteed to exist)
+    console.log('[RENDERER] Registering instrumentation listeners');
+    console.log('[RENDERER] window.instrumentation exists:', !!window.instrumentation);
+    console.log('[RENDERER] window.instrumentation.onStart exists:', !!window.instrumentation?.onStart);
+
+    if (window.instrumentation?.onStart) {
+        console.log('[RENDERER] Calling window.instrumentation.onStart()');
+        window.instrumentation.onStart(({ file }) => {
+            console.log('[RENDERER] Received instrumentation:start event for file:', file);
+            console.log('[RENDERER] Current queue length:', currentQueue.length);
+            const row = currentQueue.find(t => t.path === file);
+            console.log('[RENDERER] Found row:', row ? row.fileName : 'NOT FOUND');
+            if (!row) {
+                console.warn('[RENDERER] No matching row found for file:', file);
+                console.log('[RENDERER] Available paths:', currentQueue.map(t => t.path));
+                return;
+            }
+            console.log('[RENDERER] Updating row instrumentation state to processing');
+            row.instrumentationState = 'processing';
+            row.instrumentationDisplay = 'PROCESSING';
+            row.instrumentationPct = 0;
+            updateQueueDisplay();
+            console.log('[RENDERER] UI updated');
+        });
+    } else {
+        console.error('[RENDERER] window.instrumentation.onStart not available!');
+    }
+
+    if (window.instrumentation?.onProgress) {
+        console.log('[RENDERER] Calling window.instrumentation.onProgress()');
+        window.instrumentation.onProgress(({ file, pct = 0, label }) => {
+            console.log('[RENDERER] Received instrumentation:progress event - file:', file, 'pct:', pct, 'label:', label);
+            const row = currentQueue.find(t => t.path === file);
+            if (!row) {
+                console.warn('[RENDERER] No matching row for progress event:', file);
+                return;
+            }
+            console.log('[RENDERER] Updating instrumentation to', pct + '%');
+            row.instrumentationState = 'processing';
+            row.instrumentationPct = pct;
+            if (pct >= 100) {
+                row.instrumentationDisplay = 'COMPLETE';
+            } else if (pct >= 75) {
+                row.instrumentationDisplay = '75%';
+            } else if (pct >= 50) {
+                row.instrumentationDisplay = '50%';
+            } else if (pct >= 25) {
+                row.instrumentationDisplay = '25%';
+            } else {
+                row.instrumentationDisplay = label || 'PROCESSING';
+            }
+            updateQueueDisplay();
+        });
+    } else {
+        console.error('[RENDERER] window.instrumentation.onProgress not available!');
+    }
 });
 
 async function setupSearchView() {
