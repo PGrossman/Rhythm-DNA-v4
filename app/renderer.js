@@ -336,20 +336,10 @@ window.addEventListener('DOMContentLoaded', () => {
                 console.warn('[RENDERER] No matching row for progress event:', file);
                 return;
             }
-            console.log('[RENDERER] Updating instrumentation to', pct + '%');
-            row.instrumentationState = 'processing';
+            console.log('[RENDERER] Updating instrumentation to', pct >= 100 ? 'COMPLETE' : 'PROCESSING');
+            row.instrumentationState = pct >= 100 ? 'complete' : 'processing';
             row.instrumentationPct = pct;
-            if (pct >= 100) {
-                row.instrumentationDisplay = 'COMPLETE';
-            } else if (pct >= 75) {
-                row.instrumentationDisplay = '75%';
-            } else if (pct >= 50) {
-                row.instrumentationDisplay = '50%';
-            } else if (pct >= 25) {
-                row.instrumentationDisplay = '25%';
-            } else {
-                row.instrumentationDisplay = label || 'PROCESSING';
-            }
+            row.instrumentationDisplay = pct >= 100 ? 'COMPLETE' : 'PROCESSING';
             updateQueueDisplay();
         });
     } else {
@@ -1394,9 +1384,6 @@ function updateQueueDisplay() {
         // Handle special cases
         if (status === 'PROCESSING') {
             label = `⏳ ${status}`;
-        } else if (status === '25%' || status === '50%' || status === '75%') {
-            // v3.2.0: Map percentage states to processing style
-            label = status;
         }
         
         return `<span class="status-badge status-${statusClass}">${label}</span>`;
