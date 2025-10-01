@@ -295,7 +295,12 @@ let CURRENT_PAGE = 1;         // Current page (1-based)
 
 // v3.2.0: Register IPC listeners at module load (before any views render)
 // This ensures listeners are ready when main process fires events during analysis startup
+console.log('[RENDERER] Registering instrumentation listeners at module load');
+console.log('[RENDERER] window.instrumentation exists:', !!window.instrumentation);
+console.log('[RENDERER] window.instrumentation.onStart exists:', !!window.instrumentation?.onStart);
+
 if (window.instrumentation?.onStart) {
+    console.log('[RENDERER] Calling window.instrumentation.onStart()');
     window.instrumentation.onStart(({ file }) => {
         console.log('[RENDERER] Received instrumentation:start event for file:', file);
         console.log('[RENDERER] Current queue length:', currentQueue.length);
@@ -316,6 +321,7 @@ if (window.instrumentation?.onStart) {
 }
 
 if (window.instrumentation?.onProgress) {
+    console.log('[RENDERER] Calling window.instrumentation.onProgress()');
     window.instrumentation.onProgress(({ file, pct = 0, label }) => {
         console.log('[RENDERER] Received instrumentation:progress event - file:', file, 'pct:', pct, 'label:', label);
         const row = currentQueue.find(t => t.path === file);
