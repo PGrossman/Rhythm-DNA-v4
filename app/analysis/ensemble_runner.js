@@ -119,8 +119,7 @@ function analyzeWithEnsemble(audioPath, opts = {}) {
       const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), "ensemble-"));
       const outPath = path.join(tmpDir, "result.json");
 
-      // v1.3.0: Add -B flag to prevent Python bytecode caching (ensures latest code runs)
-      const args = ["-B", script, "--audio", audioPath, "--json-out", outPath, "--demucs", demucs ? "1" : "0"];
+      const args = [script, "--audio", audioPath, "--json-out", outPath, "--demucs", demucs ? "1" : "0"];
       
       // Add diagnostics flag if enabled
       if (process.env.RNA_DIAG_INSTRUMENTS) {
@@ -133,10 +132,8 @@ function analyzeWithEnsemble(audioPath, opts = {}) {
       }
 
       // Set up Python environment with log directory
-      // v1.3.0: Add PYTHONDONTWRITEBYTECODE to prevent any bytecode caching
       const pyEnv = Object.assign({}, process.env, {
-        ENSEMBLE_LOG_DIR: LOG_DIR,  // tells Python where to dump its own debug file(s)
-        PYTHONDONTWRITEBYTECODE: "1"  // Prevents .pyc files and forces fresh code loading
+        ENSEMBLE_LOG_DIR: LOG_DIR  // tells Python where to dump its own debug file(s)
       });
 
       const baseName = path.basename(audioPath || 'unknown');
