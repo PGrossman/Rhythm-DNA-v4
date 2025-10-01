@@ -2035,6 +2035,7 @@ def _detect_electronic_elements(analysis_out, creative_data=None):
     Infer synthesizer/electronic presence from genre + instrument patterns.
     Returns dict with 'present' (bool), 'confidence' (str), and 'reasons' (list).
     """
+    import sys
     result = {"present": False, "confidence": None, "reasons": []}
     
     instruments = set(analysis_out.get("instruments", []))
@@ -2042,6 +2043,7 @@ def _detect_electronic_elements(analysis_out, creative_data=None):
     per_model = trace.get("per_model", {})
     
     print(f"[ELECTRONIC] Detection called with instruments: {list(instruments)}")
+    sys.stdout.flush()
     
     # Extract creative genre if available
     genres = []
@@ -2076,13 +2078,17 @@ def _detect_electronic_elements(analysis_out, creative_data=None):
     strings_pos = get_pos("strings")
     
     print(f"[ELECTRONIC] has_keyboard={has_keyboard}, has_strings={has_strings}, has_brass={has_brass}, has_woodwinds={has_woodwinds}")
+    sys.stdout.flush()
     print(f"[ELECTRONIC] organ_mean={organ_mean:.4f}, strings_mean={strings_mean:.4f}, strings_pos={strings_pos:.4f}")
+    sys.stdout.flush()
     print(f"[ELECTRONIC] genres={genres}")
+    sys.stdout.flush()
     
     # Rule 1: Electronic/Cinematic genre + orchestral sections + keyboard
     electronic_genres = ["Electronic", "Cinematic", "Ambient", "Synthwave", "EDM"]
     has_electronic_genre = any(g in genres for g in electronic_genres)
     print(f"[ELECTRONIC] Rule 1 check: has_electronic_genre={has_electronic_genre}, has_keyboard={has_keyboard}, has_orch={has_strings or has_brass or has_woodwinds}")
+    sys.stdout.flush()
     
     if has_electronic_genre and has_keyboard and (has_strings or has_brass or has_woodwinds):
         result["present"] = True
@@ -2092,26 +2098,31 @@ def _detect_electronic_elements(analysis_out, creative_data=None):
     
     # Rule 2: Strong keyboard + weak acoustic strings (synth pad pattern)
     print(f"[ELECTRONIC] Rule 2 check: organ_mean={organ_mean:.4f} > 0.008? {organ_mean > 0.008}, has_strings={has_strings}, strings_pos={strings_pos:.4f} < 0.15? {strings_pos < 0.15}")
+    sys.stdout.flush()
     if organ_mean > 0.008 and has_strings and strings_pos < 0.15:
         result["present"] = True
         result["confidence"] = "medium"
         result["reasons"].append(f"Strong organ (mean {organ_mean:.4f}) + strings with low pos_ratio ({strings_pos:.4f}) suggests synth pads")
         print(f"[ELECTRONIC] Rule 2 FIRED!")
+        sys.stdout.flush()
     
     # Rule 3: Very strong organ in orchestral context (likely synth workstation)
     print(f"[ELECTRONIC] Rule 3 check: organ_mean={organ_mean:.4f} > 0.012? {organ_mean > 0.012}, has_strings={has_strings}, has_brass={has_brass}")
+    sys.stdout.flush()
     if organ_mean > 0.012 and (has_strings or has_brass):
         result["present"] = True
         if result["confidence"] is None:
             result["confidence"] = "low"
         result["reasons"].append(f"Very strong organ (mean {organ_mean:.4f}) + orchestral sections")
         print(f"[ELECTRONIC] Rule 3 FIRED!")
+        sys.stdout.flush()
     
     # Upgrade confidence if multiple rules match
     if len(result["reasons"]) >= 2:
         result["confidence"] = "high"
     
     print(f"[ELECTRONIC] Final result: present={result['present']}, confidence={result['confidence']}, reasons={result['reasons']}")
+    sys.stdout.flush()
     return result
 
 # Optional HTS-AT dependencies are resolved at runtime.
@@ -5074,17 +5085,28 @@ def analyze(audio_path: str, use_demucs: bool = True, diag: bool = False) -> Dic
         out.setdefault("errors", []).append(f"orchestral_grouping_failed:{type(_e).__name__}:{_e}")
 
     # Detect electronic/synthesizer elements
+    import sys
+    print(f"[ELECTRONIC-ENTRY] About to call detection, instruments: {out.get('instruments', [])}")
+    sys.stdout.flush()
     try:
         # Creative data is not available in this function, pass None for now
         # Will be merged in main orchestration layer (Node.js)
+        print(f"[ELECTRONIC-ENTRY] Inside try block, calling _detect_electronic_elements")
+        sys.stdout.flush()
         electronic_result = _detect_electronic_elements(out, creative_data=None)
+        print(f"[ELECTRONIC-ENTRY] Detection returned: {electronic_result}")
+        sys.stdout.flush()
         if electronic_result["present"]:
             out["electronic_elements"] = {
                 "detected": True,
                 "confidence": electronic_result["confidence"],
                 "reasons": electronic_result["reasons"]
             }
+            print(f"[ELECTRONIC-ENTRY] Added electronic_elements to output")
+            sys.stdout.flush()
     except Exception as _e:
+        print(f"[ELECTRONIC-ENTRY] EXCEPTION: {type(_e).__name__}: {_e}")
+        sys.stdout.flush()
         out.setdefault("errors", []).append(f"electronic_detection_failed:{type(_e).__name__}:{_e}")
 
     return out
