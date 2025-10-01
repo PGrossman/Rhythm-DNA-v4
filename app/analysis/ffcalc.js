@@ -24,6 +24,39 @@ const { shouldWriteCsv } = require('../utils/csvWriter');
 // v1.0.0: Orchestration mode toggle
 const INSTRUMENTATION_MODE = process.env.RNA_INSTRUMENTATION_MODE || "CONCURRENT"; // "SEQUENTIAL" or "CONCURRENT"
 
+// v1.2.0: Background processing queue (simple semaphore for concurrency control)
+let activeBackgroundTasks = 0;
+const MAX_BACKGROUND_CONCURRENCY = 4; // Max concurrent Creative+Instrumentation pairs
+const backgroundQueue = [];
+
+// v1.2.0: Process next queued background task
+function processNextBackgroundTask() {
+  if (activeBackgroundTasks >= MAX_BACKGROUND_CONCURRENCY || backgroundQueue.length === 0) {
+    return;
+  }
+  
+  const task = backgroundQueue.shift();
+  activeBackgroundTasks++;
+  console.log(`[BACKGROUND-QUEUE] Starting task (active: ${activeBackgroundTasks}/${MAX_BACKGROUND_CONCURRENCY}, queued: ${backgroundQueue.length})`);
+  
+  task()
+    .catch(err => {
+      console.error('[BACKGROUND-QUEUE] Task failed:', err);
+    })
+    .finally(() => {
+      activeBackgroundTasks--;
+      console.log(`[BACKGROUND-QUEUE] Task complete (active: ${activeBackgroundTasks}/${MAX_BACKGROUND_CONCURRENCY}, queued: ${backgroundQueue.length})`);
+      processNextBackgroundTask(); // Start next task if available
+    });
+}
+
+// v1.2.0: Enqueue background task with concurrency control
+function enqueueBackgroundTask(taskFn) {
+  backgroundQueue.push(taskFn);
+  console.log(`[BACKGROUND-QUEUE] Task queued (active: ${activeBackgroundTasks}/${MAX_BACKGROUND_CONCURRENCY}, queued: ${backgroundQueue.length})`);
+  processNextBackgroundTask();
+}
+
 // v2.1.0: Instrumentation progress helper
 function sendInstrProgress(file, pct, label) {
   const win = BrowserWindow.getAllWindows()[0];
@@ -1534,8 +1567,8 @@ async function analyzeMp3(filePath, win = null, model = 'qwen3:8b', dbFolder = n
   }
   const dir = path.dirname(filePath);
   
-  // v1.2.0: Start background processing (don't await)
-  completeAnalysisInBackground(filePath, win, model, dbFolder, settings, {
+  // v1.2.0: Enqueue background processing with concurrency control
+  enqueueBackgroundTask(() => completeAnalysisInBackground(filePath, win, model, dbFolder, settings, {
     baseName,
     probe,
     hasWav,
@@ -1544,17 +1577,7 @@ async function analyzeMp3(filePath, win = null, model = 'qwen3:8b', dbFolder = n
     tempoSource,
     id3Tags,
     durSec
-  }).catch(err => {
-    console.error('[BACKGROUND] Analysis completion failed:', err);
-    if (win) {
-      win.webContents.send('jobProgress', {
-        trackId: filePath,
-        stage: 'all',
-        status: 'ERROR',
-        note: 'Background analysis failed: ' + err.message
-      });
-    }
-  });
+  }));
   
   // Return immediately with partial (technical-only) result
   const partialAnalysis = {
@@ -1591,6 +1614,8 @@ async function completeAnalysisInBackground(filePath, win, model, dbFolder, sett
   const dir = path.dirname(filePath);
   
   console.log('[BACKGROUND] Starting Creative + Instrumentation for:', baseName);
+  
+  try {
   
   // Start both Creative and Instrumentation in parallel
   const creativePromise = runCreativeAnalysis(
@@ -2013,8 +2038,19 @@ async function completeAnalysisInBackground(filePath, win, model, dbFolder, sett
     });
   }
   
-  // Background function doesn't return a value (nothing awaits it)
-  return;
+  } catch (error) {
+    // Handle any errors in background processing
+    console.error('[BACKGROUND] Analysis completion failed for', baseName, ':', error);
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('jobProgress', {
+        trackId: filePath,
+        stage: 'all',
+        status: 'ERROR',
+        note: 'Background analysis failed: ' + error.message
+      });
+    }
+    throw error; // Re-throw so queue handler can log it
+  }
 }
 
 module.exports = { analyzeMp3 };
