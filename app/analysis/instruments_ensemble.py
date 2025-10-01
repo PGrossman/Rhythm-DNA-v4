@@ -686,7 +686,7 @@ def _apply_mix_only_core_boost(decision_trace, already):
     TH = {
         "acoustic_guitar": {"mean": 0.006, "pos": 0.023},
         "drum_kit":        {"mean": 0.006, "pos": 0.030},
-        "electric_guitar": {"mean": 0.006, "pos": 0.023},
+        "electric_guitar": {"mean": 0.006, "pos": 0.022},
         "bass_guitar":     {"mean": 0.004, "pos": 0.000},
     }
 
@@ -2269,7 +2269,7 @@ MIX_ONLY_CORE_V2 = {
     },
     "electric_guitar": {
         "mean": 0.006,     # combined PANNs+YAMNet mean threshold
-        "pos": 0.023       # was 0.03; cp≈0.023 observed
+        "pos": 0.022       # lowered from 0.023 to catch guitars in dense mixes (Down Under: 0.0225)
     },
     "bass_guitar": {
         "mean": 0.004,     # updated from 0.006
@@ -4642,7 +4642,7 @@ def analyze(audio_path: str, use_demucs: bool = True, diag: bool = False) -> Dic
                     "thresholds": {
                         "acoustic_guitar": {"mean": 0.006, "pos": 0.023},
                         "drum_kit":        {"mean": 0.006, "pos": 0.030},
-                        "electric_guitar": {"mean": 0.006, "pos": 0.023},
+                        "electric_guitar": {"mean": 0.006, "pos": 0.022},
                         "bass_guitar":     {"mean": 0.004, "pos": 0.000},
                     },
                     "decisions": core_decisions,
@@ -4853,7 +4853,7 @@ def analyze(audio_path: str, use_demucs: bool = True, diag: bool = False) -> Dic
             "mix_only_core_v2": {
                 "acoustic_guitar": {"mean": 0.006, "pos": 0.023},
                 "drum_kit":        {"mean": 0.006, "pos": 0.030},
-                "electric_guitar": {"mean": 0.006, "pos": 0.023},
+                "electric_guitar": {"mean": 0.006, "pos": 0.022},
                 "bass_guitar":     {"mean": 0.004, "pos": 0.000}
             },
             "mix_only_woodwinds_v1": {
