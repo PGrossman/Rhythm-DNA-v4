@@ -2030,6 +2030,78 @@ def _collapse_orchestral_groups(final_list, per_model=None):
             keep.append(label)
     return keep
 
+def _detect_electronic_elements(analysis_out, creative_data=None):
+    """
+    Infer synthesizer/electronic presence from genre + instrument patterns.
+    Returns dict with 'present' (bool), 'confidence' (str), and 'reasons' (list).
+    """
+    result = {"present": False, "confidence": None, "reasons": []}
+    
+    instruments = set(analysis_out.get("instruments", []))
+    trace = analysis_out.get("decision_trace", {})
+    per_model = trace.get("per_model", {})
+    
+    # Extract creative genre if available
+    genres = []
+    if creative_data and isinstance(creative_data, dict):
+        genres = creative_data.get("genre", [])
+    
+    # Helper: get combined mean
+    def get_mean(inst):
+        try:
+            p = per_model.get("panns", {}).get("mean_probs", {}).get(inst, 0.0)
+            y = per_model.get("yamnet", {}).get("mean_probs", {}).get(inst, 0.0)
+            return p + y
+        except:
+            return 0.0
+    
+    # Helper: get max pos ratio
+    def get_pos(inst):
+        try:
+            p = per_model.get("panns", {}).get("pos_ratio", {}).get(inst, 0.0)
+            y = per_model.get("yamnet", {}).get("pos_ratio", {}).get(inst, 0.0)
+            return max(p, y)
+        except:
+            return 0.0
+    
+    has_keyboard = ("Piano" in instruments or "Organ" in instruments)
+    has_strings = "Strings (section)" in instruments
+    has_brass = "Brass (section)" in instruments
+    has_woodwinds = "Woodwinds (section)" in instruments
+    
+    organ_mean = get_mean("organ")
+    strings_mean = get_mean("strings")
+    strings_pos = get_pos("strings")
+    
+    # Rule 1: Electronic/Cinematic genre + orchestral sections + keyboard
+    electronic_genres = ["Electronic", "Cinematic", "Ambient", "Synthwave", "EDM"]
+    has_electronic_genre = any(g in genres for g in electronic_genres)
+    
+    if has_electronic_genre and has_keyboard and (has_strings or has_brass or has_woodwinds):
+        result["present"] = True
+        result["confidence"] = "medium"
+        matched_genres = [g for g in genres if g in electronic_genres]
+        result["reasons"].append(f"Electronic genre ({', '.join(matched_genres)}) + keyboard + orchestral sections")
+    
+    # Rule 2: Strong keyboard + weak acoustic strings (synth pad pattern)
+    if organ_mean > 0.008 and has_strings and strings_pos < 0.15:
+        result["present"] = True
+        result["confidence"] = "medium"
+        result["reasons"].append(f"Strong organ (mean {organ_mean:.4f}) + strings with low pos_ratio ({strings_pos:.4f}) suggests synth pads")
+    
+    # Rule 3: Very strong organ in orchestral context (likely synth workstation)
+    if organ_mean > 0.012 and (has_strings or has_brass):
+        result["present"] = True
+        if result["confidence"] is None:
+            result["confidence"] = "low"
+        result["reasons"].append(f"Very strong organ (mean {organ_mean:.4f}) + orchestral sections")
+    
+    # Upgrade confidence if multiple rules match
+    if len(result["reasons"]) >= 2:
+        result["confidence"] = "high"
+    
+    return result
+
 # Optional HTS-AT dependencies are resolved at runtime.
 try:
     import torchaudio
@@ -4988,6 +5060,20 @@ def analyze(audio_path: str, use_demucs: bool = True, diag: bool = False) -> Dic
     except Exception as _e:
         # Never break pipeline if grouping hiccups
         out.setdefault("errors", []).append(f"orchestral_grouping_failed:{type(_e).__name__}:{_e}")
+
+    # Detect electronic/synthesizer elements
+    try:
+        # Creative data is not available in this function, pass None for now
+        # Will be merged in main orchestration layer (Node.js)
+        electronic_result = _detect_electronic_elements(out, creative_data=None)
+        if electronic_result["present"]:
+            out["electronic_elements"] = {
+                "detected": True,
+                "confidence": electronic_result["confidence"],
+                "reasons": electronic_result["reasons"]
+            }
+    except Exception as _e:
+        out.setdefault("errors", []).append(f"electronic_detection_failed:{type(_e).__name__}:{_e}")
 
     return out
 

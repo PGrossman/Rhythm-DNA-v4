@@ -1695,6 +1695,24 @@ async function analyzeMp3(filePath, win = null, model = 'qwen3:8b', dbFolder = n
     decision_trace: decisionTrace,
   };
 
+  // Enhance electronic detection with creative genre data
+  if (analysis.instruments_ensemble?.electronic_elements && analysis.creative?.genre) {
+    try {
+      const electronicData = analysis.instruments_ensemble.electronic_elements;
+      const genres = analysis.creative.genre || [];
+      const electronicGenres = ["Electronic", "Cinematic", "Ambient", "Synthwave", "EDM"];
+      const hasElectronicGenre = genres.some(g => electronicGenres.includes(g));
+      
+      // Re-evaluate confidence with creative data
+      if (hasElectronicGenre && electronicData.confidence === "low") {
+        electronicData.confidence = "medium";
+        electronicData.reasons.push(`Creative analysis confirms electronic genre: ${genres.filter(g => electronicGenres.includes(g)).join(', ')}`);
+      }
+    } catch (e) {
+      log('[ELECTRONIC] Failed to enhance detection with creative data:', e.message);
+    }
+  }
+
   // 🚫 Kill legacy / misleading fields so they cannot leak into UI/filters:
   delete analysis.detected_instruments;       // remove this field entirely
   delete analysis.audio_probes;               // keep it only if you truly need raw debug; otherwise delete
@@ -1823,6 +1841,14 @@ async function analyzeMp3(filePath, win = null, model = 'qwen3:8b', dbFolder = n
             ? analysis.finalInstruments
             : (analysis?.instruments || []);
           return ['Audio Detection', audioDetected.join('; ') || 'None'];
+        })(),
+        // Add electronic elements detection
+        (() => {
+          const electronic = analysis?.instruments_ensemble?.electronic_elements;
+          if (electronic?.detected) {
+            return ['Electronic Elements', `Yes (${electronic.confidence} confidence)`];
+          }
+          return ['Electronic Elements', 'No'];
         })(),
         ['Run ID', analysis.__run_id || ''],
         // Audio Sources with robust fallback
