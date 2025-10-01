@@ -683,11 +683,10 @@ def _apply_mix_only_core_boost(decision_trace, already):
     p_means, p_pos, y_means, y_pos = _trace_get_means_pos(decision_trace)
 
     # Use MIX_ONLY_CORE_V2 thresholds
-    # v1.3.0: Lower electric_guitar mean to 0.005 to catch subtle electric guitar in dense mixes
     TH = {
         "acoustic_guitar": {"mean": 0.006, "pos": 0.023},
         "drum_kit":        {"mean": 0.006, "pos": 0.030},
-        "electric_guitar": {"mean": 0.005, "pos": 0.023},
+        "electric_guitar": {"mean": 0.006, "pos": 0.023},
         "bass_guitar":     {"mean": 0.004, "pos": 0.000},
     }
 
@@ -787,14 +786,7 @@ def _apply_mix_only_strings_v1(per_model, instruments, decision_trace):
     piano_mean   = cm("piano")
     brass_mean   = cm("brass")
 
-    # v1.3.0: Stricter orchestral context - require BOTH piano AND brass present
-    # This prevents false orchestral contexts in pop mixes with weak piano/brass
-    piano_gate_pass = (piano_mean >= TH["gate"]["piano"])
-    brass_gate_pass = (brass_mean >= TH["gate"]["brass"])
-    
-    # True orchestral context: both present OR very strong combined evidence
-    strong_combined = (piano_mean + brass_mean) >= 0.014
-    gate_ok = (piano_gate_pass and brass_gate_pass) or strong_combined
+    gate_ok = (piano_mean >= TH["gate"]["piano"]) or (brass_mean >= TH["gate"]["brass"])
     
     # v1.2.0: Optional micro check - if individual string instruments are detected, at least one should have pos >= 0.004
     # But don't block if only generic "strings" label exists (common in orchestral mixes)
@@ -1933,26 +1925,8 @@ def _family_rollup(decision, decision_trace):
         fam_mean, fam_pos = family_agg_stats(members)
         spike = family_spike(members, rollup_cfg["single_high"])
 
-        # Context rule: Require orchestral context for Strings and Woodwinds
+        # Context rule (helps Woodwinds precision): require Strings or Brass already present
         context_ok = True
-        
-        # v1.3.0: Strings context - require piano OR brass at orchestral levels
-        # Prevents synth-pad false positives in pop/rock (e.g., "Down Under")
-        if group_label == "Strings (section)":
-            try:
-                piano_mean = _combined_mean(decision_trace, "piano")
-            except Exception as e:
-                _log.debug("booster _combined_mean failed for piano: %s", e)
-                piano_mean = 0.0
-            try:
-                brass_mean = _combined_mean(decision_trace, "brass")
-            except Exception as e:
-                _log.debug("booster _combined_mean failed for brass: %s", e)
-                brass_mean = 0.0
-            # Require piano >= 0.005 OR brass >= 0.006 to consider this orchestral context
-            context_ok = (piano_mean >= 0.005) or (brass_mean >= 0.006) or have_brass
-        
-        # Woodwinds context (helps precision): require Strings or Brass already present
         if rollup_cfg["require_context"] and group_label == "Woodwinds":
             try:
                 strings_mean = _combined_mean(decision_trace, "strings")
@@ -1965,7 +1939,6 @@ def _family_rollup(decision, decision_trace):
                 _log.debug("booster _combined_mean failed for brass: %s", e)
                 brass_mean = 0.0
             context_ok = (
-                have_strings or have_brass or
                 (strings_mean >= rollup_cfg.get("context_gate", 0.002)) or
                 (brass_mean >= rollup_cfg.get("context_gate", 0.002))
             )
@@ -4653,7 +4626,7 @@ def analyze(audio_path: str, use_demucs: bool = True, diag: bool = False) -> Dic
                     "thresholds": {
                         "acoustic_guitar": {"mean": 0.006, "pos": 0.023},
                         "drum_kit":        {"mean": 0.006, "pos": 0.030},
-                        "electric_guitar": {"mean": 0.005, "pos": 0.023},
+                        "electric_guitar": {"mean": 0.006, "pos": 0.023},
                         "bass_guitar":     {"mean": 0.004, "pos": 0.000},
                     },
                     "decisions": core_decisions,
@@ -4864,7 +4837,7 @@ def analyze(audio_path: str, use_demucs: bool = True, diag: bool = False) -> Dic
             "mix_only_core_v2": {
                 "acoustic_guitar": {"mean": 0.006, "pos": 0.023},
                 "drum_kit":        {"mean": 0.006, "pos": 0.030},
-                "electric_guitar": {"mean": 0.005, "pos": 0.023},
+                "electric_guitar": {"mean": 0.006, "pos": 0.023},
                 "bass_guitar":     {"mean": 0.004, "pos": 0.000}
             },
             "mix_only_woodwinds_v1": {
@@ -4953,20 +4926,9 @@ def analyze(audio_path: str, use_demucs: bool = True, diag: bool = False) -> Dic
                 current_instruments.remove("Brass (section)")
         
         # Strings grouping: ensure "Strings (section)" requires pos_ratio > 0
-        # v1.2.0: Skip removal if strong orchestral context (real strings can have pos=0 in dense mixes)
         if "Strings (section)" in current_instruments:
             if not _has_pos(decision_trace, "strings"):
-                # Check for orchestral context before removing
-                per_model = decision_trace.get("per_model", {})
-                panns_means = per_model.get("panns", {}).get("mean_probs", {})
-                yamnet_means = per_model.get("yamnet", {}).get("mean_probs", {})
-                piano_mean = panns_means.get("piano", 0.0) + yamnet_means.get("piano", 0.0)
-                brass_mean = panns_means.get("brass", 0.0) + yamnet_means.get("brass", 0.0)
-                strong_orchestral_context = (piano_mean >= 0.007) and (brass_mean >= 0.0075)
-                
-                # Only remove if NOT in orchestral context
-                if not strong_orchestral_context:
-                    current_instruments.remove("Strings (section)")
+                current_instruments.remove("Strings (section)")
         
         out["instruments"] = current_instruments
         
