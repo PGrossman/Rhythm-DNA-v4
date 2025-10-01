@@ -126,11 +126,15 @@ function finalizeInstruments({
   // Preserve existing "Strings" soft-guard behavior:
   // If Strings exists but there are no bowed instruments and only pad-like instruments,
   // remove Strings (mirrors previous logic but uses canonical "Strings").
+  // v1.2.0: Add orchestral context check - if Brass present, keep Strings (real orchestral, not synth pads)
   const S = new Set(Array.from(outSet));
   const hasStrings = S.has("Strings");
   const hasBowed = ["Violin", "Viola", "Cello", "Double Bass"].some(x => S.has(x));
   const hasPads = ["Organ", "Electric organ", "Hammond organ", "Keyboard", "Synth"].some(x => S.has(x));
-  if (hasStrings && !hasBowed && hasPads) {
+  const hasBrass = S.has("Brass");  // v1.2.0: Orchestral context indicator
+  
+  // Only remove strings if no bowed instruments, pads present, AND no brass (i.e., not orchestral)
+  if (hasStrings && !hasBowed && hasPads && !hasBrass) {
     S.delete("Strings");
   }
 
@@ -147,7 +151,7 @@ function finalizeInstruments({
     }
   }
   // finally, if family labels exist but were not in original order, append them
-  for (const f of ["Brass", "Woodwinds"]) {
+  for (const f of ["Brass", "Woodwinds", "Strings"]) {
     if (S.has(f) && !added.has(f)) {
       final.push(f);
       added.add(f);
