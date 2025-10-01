@@ -1297,31 +1297,42 @@ async function processQueue() {
             const result = await window.api.analyzeFile(track.path);
             
             if (result.success) {
-                track.status = 'COMPLETE';
-                track.techStatus = 'COMPLETE';
-                track.creativeStatus = 'COMPLETE';
-                console.log(`[Renderer] Complete: ${track.fileName}`);
-                
-                // Normalize analysis data if present in result
-                if (result.analysis) {
-                    normalizeAnalysis(result.analysis);
-                }
-                
-                // v3.0.0: Prefer finalized instruments, then instruments, from the analysis object
-                const a = result?.analysis || {};
-                const instruments = Array.isArray(a?.final_instruments)
-                  ? a.final_instruments
-                  : (Array.isArray(a?.instruments) ? a.instruments : []);
-                
-                // v3.2.0: KISS rule with badge styling - if instruments exist, consider success
-                if (instruments.length) {
-                    track.instrumentationState = 'complete';
-                    track.instrumentationPct = 100;
-                    track.instrumentationDisplay = 'COMPLETE';
+                // v1.2.0: Handle background processing (Technical complete, Creative/Instr running in background)
+                if (result.backgroundProcessing) {
+                    track.status = 'BACKGROUND';
+                    track.techStatus = 'COMPLETE';
+                    track.creativeStatus = 'PROCESSING';
+                    track.instrumentationState = 'processing';
+                    track.instrumentationDisplay = 'PROCESSING';
+                    console.log(`[Renderer] Technical complete, background phases running: ${track.fileName}`);
                 } else {
-                    // Only mark error when there are truly no instruments
-                    track.instrumentationState = 'error';
-                    track.instrumentationDisplay = 'ERROR';
+                    // Legacy path: all phases complete
+                    track.status = 'COMPLETE';
+                    track.techStatus = 'COMPLETE';
+                    track.creativeStatus = 'COMPLETE';
+                    console.log(`[Renderer] Complete: ${track.fileName}`);
+                    
+                    // Normalize analysis data if present in result
+                    if (result.analysis) {
+                        normalizeAnalysis(result.analysis);
+                    }
+                    
+                    // v3.0.0: Prefer finalized instruments, then instruments, from the analysis object
+                    const a = result?.analysis || {};
+                    const instruments = Array.isArray(a?.final_instruments)
+                      ? a.final_instruments
+                      : (Array.isArray(a?.instruments) ? a.instruments : []);
+                    
+                    // v3.2.0: KISS rule with badge styling - if instruments exist, consider success
+                    if (instruments.length) {
+                        track.instrumentationState = 'complete';
+                        track.instrumentationPct = 100;
+                        track.instrumentationDisplay = 'COMPLETE';
+                    } else {
+                        // Only mark error when there are truly no instruments
+                        track.instrumentationState = 'error';
+                        track.instrumentationDisplay = 'ERROR';
+                    }
                 }
             } else {
                 track.status = 'ERROR';
@@ -1466,6 +1477,39 @@ window.api?.onQueueUpdate?.((event, data) => {
         track.techStatus = data.techStatus;
         track.creativeStatus = data.creativeStatus;
         updateQueueDisplay();
+    }
+});
+
+// v1.2.0: Listen for track completion from background processing
+window.api?.onTrackComplete?.((data) => {
+    console.log('[Renderer] Track complete (background):', data.filePath);
+    const track = currentQueue.find(t => t.path === data.filePath);
+    if (track) {
+        track.status = 'COMPLETE';
+        track.techStatus = 'COMPLETE';
+        track.creativeStatus = 'COMPLETE';
+        track.instrumentationState = 'complete';
+        track.instrumentationPct = 100;
+        track.instrumentationDisplay = 'COMPLETE';
+        
+        // Normalize analysis data
+        if (data.analysis) {
+            normalizeAnalysis(data.analysis);
+            
+            // Check for instruments
+            const a = data.analysis || {};
+            const instruments = Array.isArray(a?.final_instruments)
+              ? a.final_instruments
+              : (Array.isArray(a?.instruments) ? a.instruments : []);
+            
+            if (!instruments.length) {
+                track.instrumentationState = 'error';
+                track.instrumentationDisplay = 'ERROR';
+            }
+        }
+        
+        updateQueueDisplay();
+        console.log(`[Renderer] Track fully complete: ${track.fileName}`);
     }
 });
 

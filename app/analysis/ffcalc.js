@@ -1516,14 +1516,14 @@ async function analyzeMp3(filePath, win = null, model = 'qwen3:8b', dbFolder = n
   }
 
   
-  // === v1.0.0: Technical complete - now start Creative and Instrumentation in parallel ===
-  console.log('[ORCHESTRATION] Technical complete (BPM + ID3), starting Creative and Instrumentation in parallel');
+  // === v1.2.0: Technical complete - return immediately, run Creative/Instrumentation in background ===
+  console.log('[ORCHESTRATION] Technical complete (BPM + ID3), starting background phases');
   if (win) {
     win.webContents.send('jobProgress', {
       trackId: filePath,
       stage: 'technical',
       status: 'COMPLETE',
-      note: 'Technical analysis complete'
+      note: 'Technical analysis complete - background phases starting'
     });
     win.webContents.send('jobProgress', {
       trackId: filePath,
@@ -1531,11 +1531,68 @@ async function analyzeMp3(filePath, win = null, model = 'qwen3:8b', dbFolder = n
       status: 'PROCESSING',
       note: 'Starting creative analysis with Ollama...'
     });
-    // Removed competing instrumentation progress event - runInstrumentationAnalysis handles its own start event
   }
   const dir = path.dirname(filePath);
   
-  // Start both Creative and Instrumentation in parallel (both have all required Technical outputs)
+  // v1.2.0: Start background processing (don't await)
+  completeAnalysisInBackground(filePath, win, model, dbFolder, settings, {
+    baseName,
+    probe,
+    hasWav,
+    probes,
+    finalBpm,
+    tempoSource,
+    id3Tags,
+    durSec
+  }).catch(err => {
+    console.error('[BACKGROUND] Analysis completion failed:', err);
+    if (win) {
+      win.webContents.send('jobProgress', {
+        trackId: filePath,
+        stage: 'all',
+        status: 'ERROR',
+        note: 'Background analysis failed: ' + err.message
+      });
+    }
+  });
+  
+  // Return immediately with partial (technical-only) result
+  const partialAnalysis = {
+    file: baseName,
+    path: filePath,
+    analyzed_at: new Date().toISOString(),
+    duration_sec: durSec,
+    sample_rate_hz: probe?.sample_rate_hz || probe?.sample_rate || null,
+    channels: probe?.channels || null,
+    bit_rate: probe?.bit_rate || null,
+    title: id3Tags.title || baseName,
+    id3: id3Tags,
+    has_wav_version: hasWav,
+    ...probe,
+    estimated_tempo_bpm: finalBpm,
+    tempo_bpm: finalBpm,
+    bpm: finalBpm,
+    tempo_source: tempoSource,
+    __phase__: 'TECHNICAL_ONLY',
+    __background_processing__: true
+  };
+  
+  return { 
+    analysis: partialAnalysis, 
+    jsonPath: path.join(dir, `${baseName}.json`),
+    csvPath: null,
+    backgroundProcessing: true
+  };
+}
+
+// v1.2.0: Background completion handler for Creative + Instrumentation phases
+async function completeAnalysisInBackground(filePath, win, model, dbFolder, settings, techData) {
+  const { baseName, probe, hasWav, probes, finalBpm, tempoSource, id3Tags, durSec } = techData;
+  const dir = path.dirname(filePath);
+  
+  console.log('[BACKGROUND] Starting Creative + Instrumentation for:', baseName);
+  
+  // Start both Creative and Instrumentation in parallel
   const creativePromise = runCreativeAnalysis(
     baseName,
     finalBpm,
@@ -1918,7 +1975,46 @@ async function analyzeMp3(filePath, win = null, model = 'qwen3:8b', dbFolder = n
     }
   }
   
-  return { analysis, jsonPath, csvPath };
+  // v1.2.0: Update database with complete analysis
+  if (dbFolder && settings) {
+    try {
+      const DB = require('../db/jsondb.js');
+      const dbPaths = {
+        main: path.join(dbFolder, 'RhythmDB.json'),
+        criteria: path.join(dbFolder, 'CriteriaDB.json')
+      };
+      
+      const dbResult = await DB.upsertTrack(dbPaths, analysis);
+      console.log('[BACKGROUND] DB updated:', dbResult.key, 'Total tracks:', dbResult.total);
+      
+      if (settings.autoUpdateDb) {
+        const criteriaResult = await DB.rebuildCriteria(dbPaths);
+        console.log('[BACKGROUND] Criteria auto-updated:', criteriaResult.counts);
+      }
+    } catch (e) {
+      console.error('[BACKGROUND] DB upsert failed:', e);
+    }
+  }
+  
+  // Send completion event for this track
+  console.log('[BACKGROUND] Analysis complete for:', baseName);
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('track:complete', {
+      filePath,
+      analysis,
+      jsonPath,
+      csvPath
+    });
+    win.webContents.send('jobProgress', {
+      trackId: filePath,
+      stage: 'all',
+      status: 'COMPLETE',
+      note: 'All phases complete'
+    });
+  }
+  
+  // Background function doesn't return a value (nothing awaits it)
+  return;
 }
 
 module.exports = { analyzeMp3 };

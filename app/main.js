@@ -165,17 +165,22 @@ ipcMain.once('renderer:ready', async () => {
                 const result = await analyzeMp3(filePath, mainWindow, settings.ollamaModel, settings.dbFolder, settings);
                 console.log('[MAIN] Queued analysis complete:', result.jsonPath);
                 
-                // Upsert into Main DB and optionally update criteria
-                try {
-                    if (!dbPaths) await resolveDbPaths();
-                    const dbResult = await DB.upsertTrack(dbPaths, result.analysis);
-                    console.log('[MAIN] DB updated:', dbResult.key, 'Total tracks:', dbResult.total);
-                    if (settings.autoUpdateDb) {
-                        const criteriaResult = await DB.rebuildCriteria(dbPaths);
-                        console.log('[MAIN] Criteria auto-updated:', criteriaResult.counts);
+                // v1.2.0: Skip DB update if background processing is active (background function handles it)
+                if (!result.backgroundProcessing) {
+                    // Upsert into Main DB and optionally update criteria
+                    try {
+                        if (!dbPaths) await resolveDbPaths();
+                        const dbResult = await DB.upsertTrack(dbPaths, result.analysis);
+                        console.log('[MAIN] DB updated:', dbResult.key, 'Total tracks:', dbResult.total);
+                        if (settings.autoUpdateDb) {
+                            const criteriaResult = await DB.rebuildCriteria(dbPaths);
+                            console.log('[MAIN] Criteria auto-updated:', criteriaResult.counts);
+                        }
+                    } catch (e) {
+                        console.error('[MAIN] DB upsert failed:', e);
                     }
-                } catch (e) {
-                    console.error('[MAIN] DB upsert failed:', e);
+                } else {
+                    console.log('[MAIN] Skipping DB update for queued (background processing active)');
                 }
                 
                 resolve({ success: true, ...result });
@@ -328,17 +333,22 @@ const createWindow = () => {
             const result = await analyzeMp3(filePath, mainWindow, settings.ollamaModel, settings.dbFolder, settings);
             console.log('[MAIN] Analysis complete:', result.jsonPath);
             
-            // Upsert into Main DB and optionally update criteria
-            try {
-                if (!dbPaths) await resolveDbPaths();
-                const dbResult = await DB.upsertTrack(dbPaths, result.analysis);
-                console.log('[MAIN] DB updated:', dbResult.key, 'Total tracks:', dbResult.total);
-                if (settings.autoUpdateDb) {
-                    const criteriaResult = await DB.rebuildCriteria(dbPaths);
-                    console.log('[MAIN] Criteria auto-updated:', criteriaResult.counts);
+            // v1.2.0: Skip DB update if background processing is active (background function handles it)
+            if (!result.backgroundProcessing) {
+                // Upsert into Main DB and optionally update criteria
+                try {
+                    if (!dbPaths) await resolveDbPaths();
+                    const dbResult = await DB.upsertTrack(dbPaths, result.analysis);
+                    console.log('[MAIN] DB updated:', dbResult.key, 'Total tracks:', dbResult.total);
+                    if (settings.autoUpdateDb) {
+                        const criteriaResult = await DB.rebuildCriteria(dbPaths);
+                        console.log('[MAIN] Criteria auto-updated:', criteriaResult.counts);
+                    }
+                } catch (e) {
+                    console.error('[MAIN] DB upsert failed:', e);
                 }
-            } catch (e) {
-                console.error('[MAIN] DB upsert failed:', e);
+            } else {
+                console.log('[MAIN] Skipping DB update (background processing active - will update when complete)');
             }
             return { success: true, ...result };
         } catch (error) {

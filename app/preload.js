@@ -43,6 +43,11 @@ contextBridge.exposeInMainWorld('api', {
         ipcRenderer.on('log', callback);
     },
     
+    // v1.2.0: Background processing completion
+    onTrackComplete: (callback) => {
+        ipcRenderer.on('track:complete', (_e, payload) => callback(payload));
+    },
+    
     // v3.1.0: Instrumentation orchestration - pass only payload
     onStartInstrumentation: (callback) => {
         ipcRenderer.on('analysis:instrumentation:start', (_e, payload) => callback(payload));
