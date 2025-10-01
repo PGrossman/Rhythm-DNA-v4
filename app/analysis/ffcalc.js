@@ -1694,6 +1694,14 @@ async function analyzeMp3(filePath, win = null, model = 'qwen3:8b', dbFolder = n
     mode: usedDemucs ? 'stems' : 'mix-only',
     decision_trace: decisionTrace,
   };
+  
+  // Preserve electronic_elements and other diagnostic fields from Python output
+  if (instrumentationResult?.electronic_elements) {
+    analysis.instruments_ensemble.electronic_elements = instrumentationResult.electronic_elements;
+  }
+  if (instrumentationResult?.__electronic_detection_code_reached__) {
+    analysis.instruments_ensemble.__electronic_detection_code_reached__ = instrumentationResult.__electronic_detection_code_reached__;
+  }
 
   // Enhance electronic detection with creative genre data
   if (analysis.instruments_ensemble?.electronic_elements && analysis.creative?.genre) {
