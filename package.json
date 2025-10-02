@@ -1,6 +1,6 @@
 {
     "name": "rhythmdna",
-    "version": "1.5.0",
+    "version": "2.0.0",
     "main": "app/main.js",
     "scripts": {
         "start": "npx electron-forge start",
