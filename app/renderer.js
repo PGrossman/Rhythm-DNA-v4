@@ -1180,6 +1180,7 @@ function setupAnalysisView() {
         t.instrumentationState = 'waiting';
         t.instrumentationDisplay = 'WAITING';
         t.instrumentationPct = 0; // 0,25,50,75,100
+        console.log(`[QUEUE] Initialized track: ${t.fileName} - instrumentation: ${t.instrumentationDisplay}`);
                     byPath.set(key, t);
                 }
             }
@@ -1440,6 +1441,12 @@ function updateQueueDisplay() {
         } else {
             // Fallback for legacy tracks without state management
             instrumentationDisplay = 'WAITING';
+        }
+        
+        // Debug log if showing ERROR unexpectedly
+        if (instrumentationDisplay === 'ERROR' && track.status !== 'ERROR' && track.status !== 'COMPLETE') {
+            console.warn(`[QUEUE-DEBUG] Track showing ERROR but status is ${track.status}:`, track.fileName, 
+                        'instrState:', track.instrumentationState, 'instrDisplay:', track.instrumentationDisplay);
         }
         
         html += `
