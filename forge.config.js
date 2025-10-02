@@ -4,11 +4,11 @@ export default {
     executableName: "RhythmDNA",
     arch: ['arm64'], // Only build for ARM64 (Apple Silicon)
     platform: ['darwin'], // Only macOS
-    icon: './app/assets/icon.png', // App icon
+    icon: './build/icon.icns', // App icon (macOS requires .icns format)
     appBundleId: 'com.rhythmdna.app',
     appCategoryType: 'public.app-category.music',
-    appVersion: '1.0.0',
-    buildVersion: '1.0.0'
+    appVersion: '2.0.0',
+    buildVersion: '2.0.0'
     // Note: Code signing disabled for now - you can add osxSign config if you have a developer certificate
   },
   rebuildConfig: {},
