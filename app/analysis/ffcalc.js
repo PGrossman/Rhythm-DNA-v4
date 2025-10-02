@@ -1427,7 +1427,8 @@ Based on the title and technical characteristics, provide your creative analysis
           const normalizedVocals = normalizeVocals(creative.vocals);
           const hasVocals = !normalizedVocals.includes("No Vocals");
           const MAX_INSTRUMENTS = 8;
-          const rawInstruments = normalizeInstruments(creative.suggestedInstruments || []);
+          // v1.5.1: Support both 'instrument' (from LLM JSON) and 'suggestedInstruments' (legacy)
+          const rawInstruments = normalizeInstruments(creative.suggestedInstruments || creative.instrument || []);
           const validated = {
             mood: (creative.mood || []).filter(m => ENVATO_TAXONOMY.mood.includes(m)),
             genre: (creative.genre || []).filter(g => ENVATO_TAXONOMY.genre.includes(g)),
