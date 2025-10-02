@@ -76,13 +76,14 @@ const log = (...args) => ELOG(...args);
 /**
  * Run the Python ensemble analyzer in the app venv.
  * @param {string} audioPath absolute path to audio file
- * @param {{demucs?: boolean, timeoutMs?: number}} opts
+ * @param {{demucs?: boolean, timeoutMs?: number, creativeHints?: object}} opts
  * @returns {Promise<{instruments: string[], scores: object, decision_trace: object, used_demucs: boolean}>}
  */
 function analyzeWithEnsemble(audioPath, opts = {}) {
   const demucs = opts.demucs !== false;   // default true
   const timeoutMs = opts.timeoutMs ?? 0;  // 0 = no timeout
   const progressCallback = opts.progressCallback; // v1.0.0: progress callback support
+  const creativeHints = opts.creativeHints || {};  // v1.5.0: creative hints for fallback
 
   // Set up debug logging context
   setEnsembleLogContext(audioPath);
@@ -118,8 +119,21 @@ function analyzeWithEnsemble(audioPath, opts = {}) {
 
       const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), "ensemble-"));
       const outPath = path.join(tmpDir, "result.json");
+      
+      // v1.5.0: Write creative hints to temp file if provided
+      let creativeHintsPath = null;
+      if (creativeHints && Object.keys(creativeHints).length > 0) {
+        creativeHintsPath = path.join(tmpDir, "creative_hints.json");
+        await fsp.writeFile(creativeHintsPath, JSON.stringify(creativeHints));
+        ELOG('Created creative hints file:', creativeHintsPath);
+      }
 
       const args = [script, "--audio", audioPath, "--json-out", outPath, "--demucs", demucs ? "1" : "0"];
+      
+      // Add creative hints file path if available
+      if (creativeHintsPath) {
+        args.push("--creative-hints", creativeHintsPath);
+      }
       
       // Add diagnostics flag if enabled
       if (process.env.RNA_DIAG_INSTRUMENTS) {

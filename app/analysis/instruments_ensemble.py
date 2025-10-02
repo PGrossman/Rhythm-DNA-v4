@@ -3915,13 +3915,115 @@ def _apply_strings_pad_guard_v1(instruments, trace):
     except Exception as e:
         trace.setdefault("errors", []).append(f"strings_pad_guard_v1: {type(e).__name__}: {e}")
 
-def analyze(audio_path: str, use_demucs: bool = True, diag: bool = False) -> Dict[str, Any]:
+def apply_fallback_if_empty(final_instruments, creative_hints, decision_trace):
+    """
+    Apply fallback logic when no instruments detected by ML models.
+    
+    Priority:
+    1. Use creative.suggestedInstruments from LLM analysis
+    2. If creative is also empty, take top 3 detections above noise threshold
+    
+    Args:
+        final_instruments: List of instruments detected by boosters (may be empty)
+        creative_hints: Dict with 'suggestedInstruments' from LLM analysis
+        decision_trace: Dict containing per_model probabilities
+        
+    Returns:
+        Tuple of (instruments_list, fallback_metadata)
+    """
+    
+    # If we have instruments, no fallback needed
+    if len(final_instruments) > 0:
+        return final_instruments, None
+    
+    fallback_meta = {
+        "used": True,
+        "mode": None,
+        "source_instruments": []
+    }
+    
+    # Priority 1: Use LLM creative suggestions
+    creative_instruments = creative_hints.get('suggestedInstruments', [])
+    if creative_instruments and len(creative_instruments) > 0:
+        # Take up to 5 suggestions from creative analysis
+        fallback_instruments = creative_instruments[:5]
+        fallback_meta["mode"] = "creative_llm"
+        fallback_meta["source_instruments"] = creative_instruments
+        print(f"[FALLBACK] Using {len(fallback_instruments)} instruments from creative LLM: {fallback_instruments}")
+        return fallback_instruments, fallback_meta
+    
+    # Priority 2: Extract top detections above noise threshold (0.003)
+    # This is last resort when both ML and LLM found nothing
+    NOISE_THRESHOLD = 0.003
+    candidates = []
+    
+    try:
+        # Combine PANNs and YAMNet mean probabilities
+        panns_means = decision_trace.get('per_model', {}).get('panns', {}).get('mean_probs', {})
+        yamnet_means = decision_trace.get('per_model', {}).get('yamnet', {}).get('mean_probs', {})
+        
+        # Calculate combined means for each instrument
+        combined_means = {}
+        all_instruments = set(list(panns_means.keys()) + list(yamnet_means.keys()))
+        
+        for inst in all_instruments:
+            p_mean = panns_means.get(inst, 0)
+            y_mean = yamnet_means.get(inst, 0)
+            combined_means[inst] = (p_mean + y_mean) / 2.0
+        
+        # Sort by combined mean and filter above noise threshold
+        sorted_detections = sorted(combined_means.items(), key=lambda x: x[1], reverse=True)
+        
+        for inst_key, mean_val in sorted_detections:
+            if mean_val > NOISE_THRESHOLD:
+                # Map to display names
+                display_name = {
+                    'drum_kit': 'Drum Kit (acoustic)',
+                    'electric_guitar': 'Electric Guitar',
+                    'acoustic_guitar': 'Acoustic Guitar',
+                    'bass_guitar': 'Bass Guitar',
+                    'piano': 'Piano',
+                    'strings': 'Strings',
+                    'brass': 'Brass',
+                    'organ': 'Organ'
+                }.get(inst_key, inst_key.replace('_', ' ').title())
+                
+                candidates.append(display_name)
+                
+                if len(candidates) >= 3:
+                    break
+        
+        if candidates:
+            fallback_meta["mode"] = "low_confidence_top3"
+            fallback_meta["source_instruments"] = candidates
+            fallback_meta["warning"] = "Very low confidence detections - track may be purely electronic/synthetic"
+            print(f"[FALLBACK] Using {len(candidates)} low-confidence detections: {candidates}")
+            return candidates, fallback_meta
+            
+    except Exception as e:
+        print(f"[FALLBACK] Error extracting low-confidence detections: {e}")
+    
+    # Absolute last resort: return empty with metadata
+    fallback_meta["mode"] = "none_detected"
+    fallback_meta["warning"] = "No instruments detected by ML models or LLM - likely pure electronic/synthetic track"
+    print(f"[FALLBACK] No fallback available - returning empty")
+    return [], fallback_meta
+
+
+def analyze(audio_path: str, use_demucs: bool = True, diag: bool = False, creative_hints: dict = None) -> Dict[str, Any]:
     """
     Returns dict with:
       - instruments: List[str]
       - scores: Dict[str, Dict[str,float]]
       - decision_trace: Dict[str, Any]
       - used_demucs: bool
+      - fallback: Dict (optional, if fallback was used)
+    
+    Args:
+        audio_path: Path to audio file
+        use_demucs: Whether to use Demucs for stem separation
+        diag: Enable diagnostic output
+        creative_hints: Optional dict with 'suggestedInstruments' from LLM analysis
     """
     wav, sr = load_audio_mono(audio_path)
     global GLOBAL_SR
@@ -5131,6 +5233,17 @@ def analyze(audio_path: str, use_demucs: bool = True, diag: bool = False) -> Dic
         sys.stdout.flush()
         out.setdefault("errors", []).append(f"electronic_detection_failed:{type(_e).__name__}:{_e}")
 
+    # Apply fallback logic if no instruments detected
+    final_instruments, fallback_info = apply_fallback_if_empty(
+        final_instruments=out.get("instruments", []),
+        creative_hints=creative_hints or {},
+        decision_trace=out.get("decision_trace", {})
+    )
+    
+    out["instruments"] = final_instruments
+    if fallback_info:
+        out["fallback"] = fallback_info
+
     return out
 
 def main():
@@ -5140,9 +5253,20 @@ def main():
     ap.add_argument("--json-out", default=None, help="If set, write JSON here; else print to stdout")
     ap.add_argument("--demucs", type=int, default=1, help="1 to use Demucs 'other' stem for piano confirmation; 0 to disable")
     ap.add_argument("--diag", action="store_true", help="Enable detailed diagnostics output")
+    ap.add_argument("--creative-hints", default=None, help="Path to JSON file with creative hints (suggestedInstruments)")
     args = ap.parse_args()
 
-    out = analyze(args.audio, use_demucs=bool(args.demucs), diag=args.diag)
+    # Load creative hints if provided
+    creative_hints = {}
+    if args.creative_hints:
+        try:
+            with open(args.creative_hints, 'r', encoding='utf-8') as f:
+                creative_hints = json.load(f)
+            print(f"[FALLBACK] Loaded creative hints: {len(creative_hints.get('suggestedInstruments', []))} instruments")
+        except Exception as e:
+            print(f"[FALLBACK] Failed to load creative hints: {e}")
+
+    out = analyze(args.audio, use_demucs=bool(args.demucs), diag=args.diag, creative_hints=creative_hints)
     
     # Add debug logging
     DO_TRACE = os.environ.get("ENSEMBLE_TRACE", "1") != "0"

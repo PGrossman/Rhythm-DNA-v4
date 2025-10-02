@@ -76,7 +76,7 @@ function emitInstrumentationProgress(win, filePath, pct, label = null) {
 }
 
 // v2.1.0: Run instrumentation analysis with KISS progress checkpoints
-async function runInstrumentationAnalysis(filePath, win, audioHints = {}) {
+async function runInstrumentationAnalysis(filePath, win, audioHints = {}, creativeData = null) {
   try {
     console.log('[INSTRUMENTATION] Starting analysis for:', path.basename(filePath));
     console.log('[INSTRUMENTATION] Full file path:', filePath);
@@ -102,9 +102,16 @@ async function runInstrumentationAnalysis(filePath, win, audioHints = {}) {
     sendInstrProgress(filePath, 0, "processing");
     console.log('[INSTRUMENTATION] 0% progress event sent');
     
-    // Run ensemble analysis with progress callbacks
+    // v1.5.0: Prepare creative hints for fallback if available
+    const creativeHints = creativeData ? { suggestedInstruments: creativeData.suggestedInstruments || [] } : {};
+    if (creativeHints.suggestedInstruments && creativeHints.suggestedInstruments.length > 0) {
+      console.log(`[INSTRUMENTATION] Passing ${creativeHints.suggestedInstruments.length} creative suggestions for fallback`);
+    }
+    
+    // Run ensemble analysis with progress callbacks and creative hints
     const result = await analyzeWithEnsemble(filePath, { 
-      demucs: true, 
+      demucs: true,
+      creativeHints: creativeHints,
       progressCallback: (pct, stage) => {
         // Map ensemble progress to our KISS checkpoints
         if (pct >= 25) sendInstrProgress(filePath, 25); // After Demucs
@@ -1630,26 +1637,25 @@ async function completeAnalysisInBackground(filePath, win, model, dbFolder, sett
     );
     console.log('[ORCHESTRATION] Creative complete, starting Instrumentation...');
     
-    instrumentationResult = await runInstrumentationAnalysis(filePath, win, probes.hints || {});
+    // v1.5.0: Pass creative suggestions to instrumentation for fallback
+    instrumentationResult = await runInstrumentationAnalysis(filePath, win, probes.hints || {}, creativeResult.data);
     console.log('[ORCHESTRATION] Instrumentation complete');
   } else {
-    // Concurrent (default): Run both in parallel
-    console.log('[ORCHESTRATION] Running CONCURRENT: Creative || Instrumentation');
+    // Concurrent (default): Creative starts first, Instrumentation starts after creative completes
+    // This ensures creative suggestions are available for instrumentation fallback
+    console.log('[ORCHESTRATION] Running CONCURRENT: Creative (fast) → Instrumentation (slower)');
     
-    const creativePromise = runCreativeAnalysis(
+    creativeResult = await runCreativeAnalysis(
       baseName,
       finalBpm,
       model,
       probes.hints || {}
     );
+    console.log('[ORCHESTRATION] Creative complete, starting Instrumentation with creative hints');
     
-    const instrumentationPromise = runInstrumentationAnalysis(filePath, win, probes.hints || {});
-    
-    // Wait for both to complete
-    [creativeResult, instrumentationResult] = await Promise.all([
-      creativePromise,
-      instrumentationPromise
-    ]);
+    // v1.5.0: Pass creative suggestions to instrumentation for fallback
+    instrumentationResult = await runInstrumentationAnalysis(filePath, win, probes.hints || {}, creativeResult.data);
+    console.log('[ORCHESTRATION] Instrumentation complete');
   }
   
   console.log('[ORCHESTRATION] All analysis phases complete');
