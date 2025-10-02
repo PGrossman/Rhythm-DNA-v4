@@ -20,6 +20,7 @@ const fsp = require('node:fs/promises');     // keep async fs if used elsewhere
 const os = require('node:os');
 const { BrowserWindow } = require("electron");
 const { shouldWriteCsv } = require('../utils/csvWriter');
+const { ffmpegPath, ffprobePath } = require('../lib/ffmpegPath');
 
 // v1.0.0: Orchestration mode toggle
 const INSTRUMENTATION_MODE = process.env.RNA_INSTRUMENTATION_MODE || "CONCURRENT"; // "SEQUENTIAL" or "CONCURRENT"
@@ -387,7 +388,7 @@ async function bpmFromWindow(filePath, startSec, durSec) {
       '-hide_banner', '-loglevel', 'error',
       'pipe:1'
     ];
-    const cp = spawn('ffmpeg', args);
+    const cp = spawn(ffmpegPath(), args);
     const chunks = [];
 
     cp.stdout.on('data', c => chunks.push(c));
@@ -500,7 +501,7 @@ async function extractPcmWindow(filePath, startSec, durationSec) {
   ];
   return new Promise((resolve) => {
     const chunks = [];
-    const cp = spawn('ffmpeg', args);
+    const cp = spawn(ffmpegPath(), args);
     cp.stdout.on('data', (b) => chunks.push(b));
     cp.stderr.on('data', () => {}); // quiet
     cp.on('error', () => resolve(null));
@@ -859,7 +860,7 @@ async function ffprobeJson(filePath) {
     '-show_entries', 'format=duration,bit_rate:stream=index,codec_type,codec_name,sample_rate,channels',
     filePath
   ];
-  const out = await run('ffprobe', args);
+  const out = await run(ffprobePath(), args);
   const j = JSON.parse(out);
   const fmt = j.format || {};
   const audio = (j.streams || []).find(s => s.codec_type === 'audio') || {};

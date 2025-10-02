@@ -3,6 +3,7 @@
 // Node-friendly audio classification via @xenova/transformers (AST model)
 const path = require('node:path');
 const { spawn } = require('node:child_process');
+const { ffmpegPath } = require('../../lib/ffmpegPath');
 let audioPipe = null;
 
 async function ensureAudioClassifier() {
@@ -36,7 +37,7 @@ function ffmpegDecodeToTensor(filePath, startSec, durSec, sr = 16000, afChain = 
 			'-hide_banner', '-loglevel', 'error',
 			'pipe:1'
 		];
-		const p = spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe'] });
+		const p = spawn(ffmpegPath(), args, { stdio: ['ignore', 'pipe', 'pipe'] });
 		const chunks = [];
 		let err = '';
 		p.stdout.on('data', d => chunks.push(d));

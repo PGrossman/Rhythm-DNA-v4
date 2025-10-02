@@ -8,7 +8,10 @@ export default {
     appBundleId: 'com.rhythmdna.app',
     appCategoryType: 'public.app-category.music',
     appVersion: '2.0.0',
-    buildVersion: '2.0.0'
+    buildVersion: '2.0.0',
+    extraResource: [
+      './bin' // Include bundled ffmpeg/ffprobe binaries
+    ]
     // Note: Code signing disabled for now - you can add osxSign config if you have a developer certificate
   },
   rebuildConfig: {},

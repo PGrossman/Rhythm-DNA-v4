@@ -4,6 +4,7 @@ const fs = require('fs');
 const { fileSafe } = require('../utils/fileSafeName');
 const { ensureParentDir } = require('../utils/dbScaffold');
 const { shouldGenerateWaveformFor } = require('../utils/audioSiblings');
+const { ffmpegPath } = require('../lib/ffmpegPath');
 
 /**
  * Write a waveform PNG image for an audio file
@@ -26,7 +27,7 @@ function writeWaveformPng({ audioPath, dbFolder, width = 1200, height = 256 }) {
     const out = path.join(outDir, base + '.png');
     ensureParentDir(out);
     
-    const ff = spawnSync('ffmpeg', [
+    const ff = spawnSync(ffmpegPath(), [
       '-y',
       '-i', audioPath,
       '-filter_complex', `showwavespic=s=${width}x${height}:split_channels=0`,

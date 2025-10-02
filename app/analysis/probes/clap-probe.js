@@ -16,7 +16,7 @@ function ffmpegToF32(filePath, startSec, durSec, sr = 48000) {
 			'-hide_banner', '-loglevel', 'error',
 			'pipe:1'
 		];
-		const p = spawn('ffmpeg', args, { stdio: ['ignore','pipe','pipe'] });
+		const p = spawn(ffmpegPath(), args, { stdio: ['ignore','pipe','pipe'] });
 		const chunks = [];
 		let err = '';
 		p.stdout.on('data', d => chunks.push(d));
