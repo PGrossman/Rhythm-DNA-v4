@@ -1,9 +1,13 @@
 export function getDetectedInstruments(track) {
-  const a = track.analysis || track;
-  // v1.2.0: Use finalInstruments (preferred canonical source)
+  // v1.2.0: Check root level first (database stores JSON at root)
+  if (Array.isArray(track.finalInstruments) && track.finalInstruments.length) return track.finalInstruments;
+  if (Array.isArray(track.instruments) && track.instruments.length) return track.instruments;
+  
+  // Fallback: check nested analysis property
+  const a = track.analysis || {};
   if (Array.isArray(a.finalInstruments) && a.finalInstruments.length) return a.finalInstruments;
   if (Array.isArray(a.instruments) && a.instruments.length) return a.instruments;
-  // Note: instruments_ensemble is now an object, not an array
+  
   return [];
 }
 
@@ -14,11 +18,15 @@ export function getCreativeInstruments(track) {
 }
 
 export function getTrackInstrumentsFromAny(track) {
+  // v1.2.0: Check root level first (database stores JSON at root)
+  if (Array.isArray(track?.finalInstruments) && track.finalInstruments.length) return track.finalInstruments;
+  if (Array.isArray(track?.instruments) && track.instruments.length) return track.instruments;
+  
+  // Fallback: check nested analysis property
   const a = track?.analysis || {};
-  // v1.2.0: Use finalInstruments (preferred canonical source)
   if (Array.isArray(a.finalInstruments) && a.finalInstruments.length) return a.finalInstruments;
   if (Array.isArray(a.instruments) && a.instruments.length) return a.instruments;
-  // Note: instruments_ensemble is now an object, not an array
+  
   return [];
 }
 
