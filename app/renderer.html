@@ -201,10 +201,18 @@
         color: #666;
       }
       
+      /* Scrollable queue table wrapper - shows max 8 rows */
+      .queue-table-wrapper {
+        max-height: 420px; /* ~8 rows × 52px per row */
+        overflow-y: auto;
+        margin-top: 20px;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+      }
+      
       .queue-table {
         width: 100%;
         border-collapse: collapse;
-        margin-top: 20px;
       }
       
       .queue-table th {
@@ -215,6 +223,10 @@
         color: #666;
         font-size: 13px;
         text-transform: uppercase;
+        background: white;
+        position: sticky;
+        top: 0;
+        z-index: 10;
       }
       
       .queue-table td {

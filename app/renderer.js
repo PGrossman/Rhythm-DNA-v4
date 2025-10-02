@@ -1374,6 +1374,10 @@ function updateQueueDisplay() {
         return;
     }
     
+    // Save scroll position before updating
+    const wrapper = queueDiv.querySelector('.queue-table-wrapper');
+    const scrollPos = wrapper?.scrollTop || 0;
+    
     // Count files with existing analysis
     const existingCount = currentQueue.filter(t => t.hasExistingAnalysis).length;
     const newCount = currentQueue.length - existingCount;
@@ -1403,16 +1407,17 @@ function updateQueueDisplay() {
     let html = `
         <h3>Files to Process (${currentQueue.length} total${existingCount > 0 ? ` - ${newCount} new, ${existingCount} existing` : ''})</h3>
         ${existingCount > 0 && !allowReanalyze ? '<p style="color: #f59e0b; margin: 10px 0;">⚠️ Files with existing analysis will be skipped. Check "Re-analyze existing files" to process them.</p>' : ''}
-        <table class="queue-table">
-            <thead>
-                <tr>
-                    <th>File</th>
-                    <th>Technical</th>
-                    <th>Creative</th>
-                    <th>Instrumentation</th>
-                </tr>
-            </thead>
-            <tbody>
+        <div class="queue-table-wrapper">
+            <table class="queue-table">
+                <thead>
+                    <tr>
+                        <th>File</th>
+                        <th>Technical</th>
+                        <th>Creative</th>
+                        <th>Instrumentation</th>
+                    </tr>
+                </thead>
+                <tbody>
     `;
     
     currentQueue.forEach(track => {
@@ -1448,11 +1453,18 @@ function updateQueueDisplay() {
     });
     
     html += `
-            </tbody>
-        </table>
+                </tbody>
+            </table>
+        </div>
     `;
     
     queueDiv.innerHTML = html;
+    
+    // Restore scroll position after DOM update
+    const newWrapper = queueDiv.querySelector('.queue-table-wrapper');
+    if (newWrapper && scrollPos > 0) {
+        newWrapper.scrollTop = scrollPos;
+    }
 }
 
 // Listen for progress updates from main process
