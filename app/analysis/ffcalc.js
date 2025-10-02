@@ -143,29 +143,6 @@ const log  = (...args) => console.log(TAG, ...args);
 const warn = (...args) => console.warn(TAG, ...args);
 const err  = (...args) => console.error(TAG, ...args);
 
-// --- CREATIVE LOGGING (local, crash-proof) -------------------------------
-function _creativeLogDir() {
-  // Keep logs alongside the other app logs:
-  // app/Logs relative to this file's directory.
-  // (Matches the ensemble debug location pattern.)
-  return path.resolve(__dirname, "../Logs");
-}
-function _ensureDir(p) {
-  try { fs.mkdirSync(p, { recursive: true }); } catch (_) {}
-}
-function _stamp() {
-  const d = new Date();
-  const pad = n => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
-}
-function _writeCreativeDebug(baseName, contents) {
-  const dir = _creativeLogDir();
-  _ensureDir(dir);
-  const file = path.join(dir, `${baseName}.log`);
-  try { fs.writeFileSync(file, contents ?? "", "utf8"); } catch (_) {}
-  return file;
-}
-
 // Heuristic JSON extractor/repairer:
 // - strips code fences
 // - extracts the largest {...} block
@@ -173,16 +150,6 @@ function _writeCreativeDebug(baseName, contents) {
 // - normalizes fancy quotes
 // - tries again if the first parse fails
 function safeParseCreative(rawText, context = {}) {
-  const ctx = {
-    file: context.file || "unknown_file",
-    model: context.model || "unknown_model",
-    temp: context.temp ?? "n/a",
-  };
-
-  const stamp = _stamp();
-  const base = `creative-raw-${stamp}`;
-  _writeCreativeDebug(base, `--- RAW LLM OUTPUT (${ctx.model} @ temp=${ctx.temp}) for ${ctx.file} ---\n${rawText}\n`);
-
   let t = String(rawText || "");
 
   // Strip code fences ```json ... ``` or ``` ... ```
@@ -207,7 +174,6 @@ function safeParseCreative(rawText, context = {}) {
   // First attempt
   try {
     const parsed = tryParse(t);
-    _writeCreativeDebug(`${base}-parsed-ok`, JSON.stringify(parsed, null, 2));
     return parsed;
   } catch (e1) {
     // Attempt light repairs, then parse again
@@ -226,27 +192,11 @@ function safeParseCreative(rawText, context = {}) {
 
     try {
       const parsed2 = tryParse(repaired);
-      _writeCreativeDebug(`${base}-parsed-repaired-ok`, JSON.stringify(parsed2, null, 2));
       return parsed2;
     } catch (e2) {
-      _writeCreativeDebug(`${base}-parse-error`, [
-        "--- ORIGINAL TEXT ---",
-        t,
-        "",
-        "--- FIRST ERROR ---",
-        String(e1 && e1.stack || e1),
-        "",
-        "--- REPAIRED TEXT ---",
-        repaired,
-        "",
-        "--- SECOND ERROR ---",
-        String(e2 && e2.stack || e2),
-        ""
-      ].join("\n"));
-      const err = new Error("Creative JSON parse failed after repair");
-      err._creative_raw_file = `${base}.log`;
-      err._creative_err_file = `${base}-parse-error.log`;
-      throw err;
+      console.error("[CREATIVE] JSON parse failed:", e1.message);
+      console.error("[CREATIVE] After repair:", e2.message);
+      throw new Error("Creative JSON parse failed after repair");
     }
   }
 }
