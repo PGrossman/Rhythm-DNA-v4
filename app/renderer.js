@@ -108,9 +108,9 @@ const views = {
                     <div style="display:flex;justify-content:space-between;align-items:center;padding:8px;background:#f5f5f5;border-radius:6px;margin-bottom:12px;">
                         <div id="result-stats" style="font-size:14px;color:#666;">Loading...</div>
                         <div style="display:flex;gap:8px;align-items:center;">
-                            <button id="page-prev" style="padding:4px 12px;background:#fff;border:1px solid #ddd;border-radius:4px;cursor:pointer;font-size:13px;" disabled>Prev</button>
-                            <span id="page-label" style="font-size:13px;">Page 1</span>
-                            <button id="page-next" style="padding:4px 12px;background:#fff;border:1px solid #ddd;border-radius:4px;cursor:pointer;font-size:13px;" disabled>Next</button>
+                            <button id="page-prev" style="padding:6px 12px;background:#fff;border:1px solid #ddd;border-radius:4px;cursor:pointer;font-size:14px;color:#333;" disabled>← Prev</button>
+                            <span id="page-label" style="font-size:13px;color:#666;font-weight:500;">Page 1</span>
+                            <button id="page-next" style="padding:6px 12px;background:#fff;border:1px solid #ddd;border-radius:4px;cursor:pointer;font-size:14px;color:#333;" disabled>Next →</button>
                         </div>
                     </div>
                     
