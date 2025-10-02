@@ -21,12 +21,12 @@ export default {
       name: '@electron-forge/maker-dmg',
       config: {
         name: 'RhythmDNA',
-        title: 'RhythmDNA Installer',
-        icon: './app/assets/icon.png',
+        background: './build/dmg-background.png',
+        icon: './build/icon.icns',
         iconSize: 80,
-        contents: [
+        contents: (opts) => [
           { x: 448, y: 344, type: 'link', path: '/Applications' },
-          { x: 192, y: 344, type: 'file', path: 'RhythmDNA.app' }
+          { x: 192, y: 344, type: 'file', path: opts.appPath }
         ],
         window: {
           width: 640,
