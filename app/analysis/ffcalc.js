@@ -1853,15 +1853,21 @@ async function completeAnalysisInBackground(filePath, win, model, dbFolder, sett
         ['Alt Tempo (half)', analysis.tempo_alt_half_bpm || ''],
         ['Alt Tempo (double)', analysis.tempo_alt_double_bpm || ''],
         ['', ''],
+        ['--- Audio Detection ---', ''],
+        ['Detected Instruments', (analysis.finalInstruments || analysis.instruments || []).join('; ') || 'None'],
+        ['Electronic Elements', analysis.instruments_ensemble?.electronic_elements?.detected ? 'Yes (' + analysis.instruments_ensemble.electronic_elements.confidence + ' confidence)' : 'No'],
+        ['Audio Sources', usedDemucs ? 'Demucs (stems)' : 'Mix-only'],
+        ['Run ID', analysis.__run_id || ''],
+        ['', ''],
         ['--- Creative Analysis ---', ''],
         ['Genre', (analysis.creative?.genre || []).join(', ')],
         ['Mood', (analysis.creative?.mood || []).join(', ')],
         ['Theme', (analysis.creative?.theme || []).join(', ')],
-        ['Instruments', (analysis.creative?.suggestedInstruments || []).join(', ')],
+        ['Suggested Instruments (LLM)', (analysis.creative?.suggestedInstruments || []).join(', ')],
         ['Vocals', (analysis.creative?.vocals || []).join(', ')],
         ['Lyric Themes', (analysis.creative?.lyricThemes || []).join(', ')],
         ['Description', analysis.creative?.narrative || ''],
-        ['Confidence', Math.round((analysis.creative?.confidence || 0) * 100) + '%']
+        ['Confidence', (analysis.creative?.confidence ? Math.round(analysis.creative.confidence * 100) + '%' : '')]
       ];
       const csvContent = csvRows
         .map(([field, value]) => field + ',"' + value + '"')
