@@ -41,7 +41,7 @@ function processNextBackgroundTask() {
   
   task()
     .catch(err => {
-      console.error('[BACKGROUND-QUEUE] Task failed:', err.message || String(err), '\n', err.stack || '(no stack)');
+      console.error('[BACKGROUND-QUEUE] Task failed:', err);
     })
     .finally(() => {
       activeBackgroundTasks--;
@@ -1614,23 +1614,43 @@ async function completeAnalysisInBackground(filePath, win, model, dbFolder, sett
   const dir = path.dirname(filePath);
   
   console.log('[BACKGROUND] Starting Creative + Instrumentation for:', baseName);
+  console.log(`[ORCHESTRATION] Mode: ${INSTRUMENTATION_MODE}`);
   
-  // Start both Creative and Instrumentation in parallel
-  const creativePromise = runCreativeAnalysis(
-    baseName,
-    finalBpm,
-    model,
-    probes.hints || {}
-  );
+  let creativeResult, instrumentationResult;
   
-  const instrumentationPromise = runInstrumentationAnalysis(filePath, win, probes.hints || {});
-  
-  // Wait for both to complete
-  console.log('[ORCHESTRATION] Waiting for Creative and Instrumentation to complete...');
-  const [creativeResult, instrumentationResult] = await Promise.all([
-    creativePromise,
-    instrumentationPromise
-  ]);
+  if (INSTRUMENTATION_MODE === "SEQUENTIAL") {
+    // Sequential: Run Creative first, then Instrumentation
+    console.log('[ORCHESTRATION] Running SEQUENTIAL: Creative → Instrumentation');
+    
+    creativeResult = await runCreativeAnalysis(
+      baseName,
+      finalBpm,
+      model,
+      probes.hints || {}
+    );
+    console.log('[ORCHESTRATION] Creative complete, starting Instrumentation...');
+    
+    instrumentationResult = await runInstrumentationAnalysis(filePath, win, probes.hints || {});
+    console.log('[ORCHESTRATION] Instrumentation complete');
+  } else {
+    // Concurrent (default): Run both in parallel
+    console.log('[ORCHESTRATION] Running CONCURRENT: Creative || Instrumentation');
+    
+    const creativePromise = runCreativeAnalysis(
+      baseName,
+      finalBpm,
+      model,
+      probes.hints || {}
+    );
+    
+    const instrumentationPromise = runInstrumentationAnalysis(filePath, win, probes.hints || {});
+    
+    // Wait for both to complete
+    [creativeResult, instrumentationResult] = await Promise.all([
+      creativePromise,
+      instrumentationPromise
+    ]);
+  }
   
   console.log('[ORCHESTRATION] All analysis phases complete');
   
@@ -1656,7 +1676,7 @@ async function completeAnalysisInBackground(filePath, win, model, dbFolder, sett
   // Process creative results
   let creative = (creativeResult && creativeResult.data) || {};
   let creativeStatus = creativeResult.modelMissing
-    ? "Model '" + model + "' not installed - run: ollama pull " + model
+    ? `Model '${model}' not installed - run: ollama pull ${model}`
     : creativeResult.offline 
     ? 'Ollama offline - creative analysis skipped'
     : creativeResult.error
@@ -1762,7 +1782,7 @@ async function completeAnalysisInBackground(filePath, win, model, dbFolder, sett
   const decisionTrace = instrumentationResult?.decision_trace && typeof instrumentationResult.decision_trace === 'object' ? instrumentationResult.decision_trace : null;
   const finalInstruments = instrumentsFromPy.slice();
   
-  console.log('[ENSEMBLE] mode=' + (usedDemucs ? 'stems' : 'mix-only') + ' instruments: ' + (finalInstruments.length ? finalInstruments.join(', ') : '(none)'));
+  console.log(`[ENSEMBLE] mode=${usedDemucs ? 'stems' : 'mix-only'} instruments: ${finalInstruments.length ? finalInstruments.join(', ') : '(none)'}`);
   
   analysis.instruments = finalInstruments;
   analysis.instruments_ensemble = {
@@ -1786,7 +1806,7 @@ async function completeAnalysisInBackground(filePath, win, model, dbFolder, sett
       const hasElectronicGenre = genres.some(g => electronicGenres.includes(g));
       if (hasElectronicGenre && electronicData.confidence === "low") {
         electronicData.confidence = "medium";
-        electronicData.reasons.push('Creative analysis confirms electronic genre: ' + genres.filter(g => electronicGenres.includes(g)).join(', '));
+        electronicData.reasons.push(`Creative analysis confirms electronic genre: ${genres.filter(g => electronicGenres.includes(g)).join(', ')}`);
       }
     } catch (e) {
       console.log('[ELECTRONIC] Failed to enhance detection with creative data:', e.message);
@@ -1814,23 +1834,23 @@ async function completeAnalysisInBackground(filePath, win, model, dbFolder, sett
     analysis.finalInstruments = Array.isArray(analysis.instruments) ? analysis.instruments : [];
   }
   
-  console.log('[FFCALC] finalized instruments -> ' + (Array.isArray(analysis.finalInstruments) ? analysis.finalInstruments.join(', ') : '(none)'));
+  console.log(`[FFCALC] finalized instruments -> ${Array.isArray(analysis.finalInstruments) ? analysis.finalInstruments.join(', ') : '(none)'}`);
   
   // Write JSON
-  const jsonPath = path.join(dir, baseName + '.json');
-  console.log('[TEMPO DEBUG] Saving BPM to JSON for ' + baseName + ': ' + analysis.estimated_tempo_bpm);
+  const jsonPath = path.join(dir, `${baseName}.json`);
+  console.log(`[TEMPO DEBUG] Saving BPM to JSON for ${baseName}: ${analysis.estimated_tempo_bpm}`);
   await fsp.writeFile(jsonPath, JSON.stringify(analysis, null, 2));
   
   // CSV writing
   let csvPath = null;
   if (shouldWriteCsv(settings)) {
     try {
-      csvPath = path.join(dir, baseName + '.csv');
+      csvPath = path.join(dir, `${baseName}.csv`);
       const formatDuration = (seconds) => {
         if (!seconds) return '';
         const mins = Math.floor(seconds / 60);
         const secs = Math.floor(seconds % 60);
-        return mins + ':' + secs.toString().padStart(2, '0');
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
       };
       const csvRows = [
         ['Title', baseName],
@@ -1853,24 +1873,18 @@ async function completeAnalysisInBackground(filePath, win, model, dbFolder, sett
         ['Alt Tempo (half)', analysis.tempo_alt_half_bpm || ''],
         ['Alt Tempo (double)', analysis.tempo_alt_double_bpm || ''],
         ['', ''],
-        ['--- Audio Detection ---', ''],
-        ['Detected Instruments', (analysis.finalInstruments || analysis.instruments || []).join('; ') || 'None'],
-        ['Electronic Elements', analysis.instruments_ensemble?.electronic_elements?.detected ? 'Yes (' + analysis.instruments_ensemble.electronic_elements.confidence + ' confidence)' : 'No'],
-        ['Audio Sources', usedDemucs ? 'Demucs (stems)' : 'Mix-only'],
-        ['Run ID', analysis.__run_id || ''],
-        ['', ''],
         ['--- Creative Analysis ---', ''],
         ['Genre', (analysis.creative?.genre || []).join(', ')],
         ['Mood', (analysis.creative?.mood || []).join(', ')],
         ['Theme', (analysis.creative?.theme || []).join(', ')],
-        ['Suggested Instruments (LLM)', (analysis.creative?.suggestedInstruments || []).join(', ')],
+        ['Instruments', (analysis.creative?.suggestedInstruments || []).join(', ')],
         ['Vocals', (analysis.creative?.vocals || []).join(', ')],
         ['Lyric Themes', (analysis.creative?.lyricThemes || []).join(', ')],
         ['Description', analysis.creative?.narrative || ''],
-        ['Confidence', (analysis.creative?.confidence ? Math.round(analysis.creative.confidence * 100) + '%' : '')]
+        ['Confidence', `${Math.round((analysis.creative?.confidence || 0) * 100)}%`]
       ];
       const csvContent = csvRows
-        .map(([field, value]) => field + ',"' + value + '"')
+        .map(([field, value]) => `${field},"${value}"`)
         .join('\n');
       await fsp.writeFile(csvPath, csvContent);
       console.log("[CSV] Wrote:", csvPath);
