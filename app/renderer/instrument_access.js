@@ -1,10 +1,19 @@
 export function getDetectedInstruments(track) {
-  // v1.2.0: Check root level first (database stores JSON at root)
+  // Priority 1: Check root level first (direct JSON files from ffcalc.js)
   if (Array.isArray(track.finalInstruments) && track.finalInstruments.length) return track.finalInstruments;
   if (Array.isArray(track.instruments) && track.instruments.length) return track.instruments;
   
-  // Fallback: check nested analysis property
+  // Priority 2: Check creative.instrument (where DB actually stores via mergeFromTrackJson)
+  const c = track.creative || {};
+  if (Array.isArray(c.instrument) && c.instrument.length) return c.instrument;
+  
+  // Priority 3: Check nested analysis property
   const a = track.analysis || {};
+  
+  // Check snake_case first (as written by mergeFromTrackJson)
+  if (Array.isArray(a.final_instruments) && a.final_instruments.length) return a.final_instruments;
+  
+  // Check camelCase (legacy/compatibility)
   if (Array.isArray(a.finalInstruments) && a.finalInstruments.length) return a.finalInstruments;
   if (Array.isArray(a.instruments) && a.instruments.length) return a.instruments;
   
@@ -18,12 +27,21 @@ export function getCreativeInstruments(track) {
 }
 
 export function getTrackInstrumentsFromAny(track) {
-  // v1.2.0: Check root level first (database stores JSON at root)
+  // Priority 1: Check root level first (direct JSON files from ffcalc.js)
   if (Array.isArray(track?.finalInstruments) && track.finalInstruments.length) return track.finalInstruments;
   if (Array.isArray(track?.instruments) && track.instruments.length) return track.instruments;
   
-  // Fallback: check nested analysis property
+  // Priority 2: Check creative.instrument (where DB actually stores via mergeFromTrackJson)
+  const c = track?.creative || {};
+  if (Array.isArray(c.instrument) && c.instrument.length) return c.instrument;
+  
+  // Priority 3: Check nested analysis property
   const a = track?.analysis || {};
+  
+  // Check snake_case first (as written by mergeFromTrackJson)
+  if (Array.isArray(a.final_instruments) && a.final_instruments.length) return a.final_instruments;
+  
+  // Check camelCase (legacy/compatibility)
   if (Array.isArray(a.finalInstruments) && a.finalInstruments.length) return a.finalInstruments;
   if (Array.isArray(a.instruments) && a.instruments.length) return a.instruments;
   
