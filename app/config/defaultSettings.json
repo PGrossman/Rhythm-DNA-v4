@@ -1,0 +1,5 @@
+{
+  "writePerTrackJsonToSourceDir": true,
+  "writeCsvArtifacts": false,
+  "writeWaveformPng": true
+}

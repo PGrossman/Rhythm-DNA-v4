@@ -1,0 +1,34 @@
+{
+  "description": "Brass recall test fixture for '25 or 6 to 4' brass section detection",
+  "test_cases": [
+    {
+      "filename": "14 25 or 6 to 4.mp3",
+      "expected_instruments": [
+        "Brass Section",
+        "Trumpet",
+        "Trombone"
+      ],
+      "description": "Chicago's '25 or 6 to 4' should detect brass section with trumpet and trombone",
+      "notes": "This song features prominent brass section with trumpet and trombone parts"
+    }
+  ],
+  "validation": {
+    "per_track_json": {
+      "instrumentation.instruments": "Should contain Brass Section, Trumpet, Trombone"
+    },
+    "rhythm_db": {
+      "analysis.final_instruments": "Should include brass instruments with instrumentation precedence"
+    },
+    "criteria_db": {
+      "instrument": "Should include brass instruments for search facets"
+    }
+  },
+  "thresholds": {
+    "trumpet": {"mean": 0.004, "pos": 0.010},
+    "trombone": {"mean": 0.004, "pos": 0.010},
+    "saxophone": {"mean": 0.004, "pos": 0.010},
+    "brass_section": {"mean": 0.006, "pos": 0.012},
+    "spectral_centroid": 0.22,
+    "onset_density": 0.12
+  }
+}
